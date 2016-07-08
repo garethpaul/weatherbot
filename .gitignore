@@ -1,0 +1,11 @@
+secret
+ve
+*.pyc
+*~
+__*
+.*
+*~
+#*
+\#*
+env/
+.DS_Store
