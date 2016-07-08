@@ -1,7 +1,6 @@
 import requests
 import os
 import uuid
-import sys
 import logging
 
 WIT_API_HOST = os.getenv('WIT_URL', 'https://api.wit.ai')
@@ -10,8 +9,10 @@ DEFAULT_MAX_STEPS = 5
 INTERACTIVE_PROMPT = '> '
 LEARN_MORE = 'Learn more at https://wit.ai/docs/quickstart'
 
+
 class WitError(Exception):
     pass
+
 
 def req(logger, access_token, meth, path, params, **kwargs):
     full_url = WIT_API_HOST + path
@@ -36,18 +37,20 @@ def req(logger, access_token, meth, path, params, **kwargs):
     logger.debug('%s %s %s', meth, full_url, json)
     return json
 
+
 def validate_actions(logger, actions):
     if not isinstance(actions, dict):
         logger.warn('The second parameter should be a dictionary.')
     for action in ['send']:
         if action not in actions:
             logger.warn('The \'' + action + '\' action is missing. ' +
-                            LEARN_MORE)
+                        LEARN_MORE)
     for action in actions.keys():
         if not hasattr(actions[action], '__call__'):
             logger.warn('The \'' + action +
-                            '\' action should be a function.')
+                        '\' action should be a function.')
     return actions
+
 
 class Wit:
     access_token = None
@@ -76,7 +79,12 @@ class Wit:
             params['verbose'] = True
         if message:
             params['q'] = message
-        resp = req(self.logger, self.access_token, 'POST', '/converse', params, json=context)
+        resp = req(self.logger,
+                   self.access_token,
+                   'POST',
+                   '/converse',
+                   params,
+                   json=context)
         return resp
 
     def __run_actions(self, session_id, message, context, i, verbose):
