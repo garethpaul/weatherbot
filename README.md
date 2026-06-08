@@ -1,3 +1,8 @@
+# weatherbot
+
+<!-- README-OVERVIEW-IMAGE -->
+![Project overview](docs/readme-overview.svg)
+
 
 <img src="screenshots/logoBot.png" width="350" style="display:inline"/>
 
