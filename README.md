@@ -1,5 +1,8 @@
 # weatherbot
 
+<!-- README-OVERVIEW-IMAGE -->
+![Project overview](docs/readme-overview.svg)
+
 ## Overview
 
 `garethpaul/weatherbot` is a Python web API or service project. A chat bot for the weather
@@ -74,4 +77,3 @@ Keep changes small and tied to the project that is already present in this repos
 Prior README summary:
 
 > weatherbot <!-- README-OVERVIEW-IMAGE --> A chatbot for the weather.
-
