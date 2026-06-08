@@ -15,7 +15,7 @@
   <rect x="76" y="286" width="316" height="276" rx="14" fill="#eff6ff" stroke="#bfdbfe"/>
   <text x="102" y="328" font-size="24" font-weight="700" fill="#1d4ed8">Code Shape</text>
   <text x="102" y="370" font-size="19" fill="#1f2937">Languages: Python (3)</text>
-  <text x="102" y="430" font-size="19" fill="#1f2937">Source: None detected</text>
+  <text x="102" y="430" font-size="19" fill="#1f2937">Source: docs</text>
   <text x="102" y="490" font-size="19" fill="#1f2937">Manifests: Procfile,</text>
 <text x="102" y="514" font-size="19" fill="#1f2937">requirements.txt</text>
 
