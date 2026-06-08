@@ -44,3 +44,6 @@ API calls explicit.
 - Private conversation logs
 - Unverified webhook processing
 - Live API tests as the only verification path
+
+This list is a roadmap guardrail, not a permanent rule.
+Strong user demand and strong technical rationale can change it.
