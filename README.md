@@ -76,4 +76,4 @@ Keep changes small and tied to the project that is already present in this repos
 
 Prior README summary:
 
-> weatherbot <!-- README-OVERVIEW-IMAGE --> A chatbot for the weather.
+> weatherbot A chatbot for the weather.
