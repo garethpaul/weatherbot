@@ -34,6 +34,11 @@ Contribution rules:
 
 ## Security And Responsible Use
 
+Canonical security policy and reporting:
+
+- [`SECURITY.md`](SECURITY.md)
+
+
 Messenger bots process user messages and platform identifiers. The bot should
 verify webhooks, keep tokens secret, minimize message logging, and make external
 API calls explicit.
