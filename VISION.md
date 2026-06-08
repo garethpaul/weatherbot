@@ -38,7 +38,7 @@ Messenger bots process user messages and platform identifiers. The bot should
 verify webhooks, keep tokens secret, minimize message logging, and make external
 API calls explicit.
 
-## What We Will Not Merge For Now
+## What We Will Not Merge (For Now)
 
 - Checked-in platform tokens
 - Private conversation logs
