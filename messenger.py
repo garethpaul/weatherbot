@@ -66,18 +66,33 @@ def messenger_post():
     Handler for webhook (currently for postback and messages)
     """
     data = request.json
-    if data['object'] == 'page':
-        for entry in data['entry']:
+    if not isinstance(data, dict):
+        return 'Invalid Payload'
+
+    if data.get('object') == 'page':
+        entries = data.get('entry')
+        if not isinstance(entries, list):
+            return None
+
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
             # get all the messages
-            messages = entry['messaging']
-            if messages[0]:
-                # Get the first message
-                message = messages[0]
+            messages = entry.get('messaging')
+            if not isinstance(messages, list):
+                continue
+            for message in messages:
+                if not isinstance(message, dict):
+                    continue
                 # Yay! We got a new message!
                 # We retrieve the Facebook user ID of the sender
-                fb_id = message['sender']['id']
+                sender = message.get('sender') or {}
+                message_body = message.get('message') or {}
+                fb_id = sender.get('id') if isinstance(sender, dict) else None
                 # We retrieve the message content
-                text = message['message']['text']
+                text = message_body.get('text') if isinstance(message_body, dict) else None
+                if not fb_id or not text:
+                    continue
                 # Let's forward the message to the Wit.ai Bot Engine
                 client.run_actions(session_id=fb_id, message=text)
                 # must send back response quickly
@@ -95,11 +110,13 @@ def fb_message(sender_id, text):
         'recipient': {'id': sender_id},
         'message': {'text': text}
     }
-    # Setup the query string with your PAGE TOKEN
-    qs = 'access_token=' + FB_PAGE_TOKEN
+    headers = {
+        'Authorization': 'Bearer ' + FB_PAGE_TOKEN
+    }
     # Send POST request to messenger
-    resp = requests.post('https://graph.facebook.com/me/messages?' + qs,
+    resp = requests.post('https://graph.facebook.com/me/messages',
                          json=data,
+                         headers=headers,
                          timeout=REQUEST_TIMEOUT)
     resp.raise_for_status()
     return resp.content
