@@ -32,9 +32,14 @@ FB_PAGE_TOKEN = os.environ.get('FB_PAGE_TOKEN')
 FB_VERIFY_TOKEN = os.environ.get('FB_VERIFY_TOKEN')
 # Weather API
 OPEN_WEATHER_TOKEN = os.environ.get('OPEN_WEATHER_TOKEN')
+REQUEST_TIMEOUT = 10
+
+
+def env_flag(name):
+    return os.environ.get(name, '').lower() in ('1', 'true', 'yes', 'on')
 
 # Setup Bottle Server
-debug(True)
+debug(env_flag('BOTTLE_DEBUG'))
 app = Bottle()
 
 
@@ -94,13 +99,18 @@ def fb_message(sender_id, text):
     qs = 'access_token=' + FB_PAGE_TOKEN
     # Send POST request to messenger
     resp = requests.post('https://graph.facebook.com/me/messages?' + qs,
-                         json=data)
+                         json=data,
+                         timeout=REQUEST_TIMEOUT)
+    resp.raise_for_status()
     return resp.content
 
 
 def get_weather(text):
     qs = {'q': text, 'appid': OPEN_WEATHER_TOKEN}
-    resp = requests.get('http://api.openweathermap.org/data/2.5/weather', qs)
+    resp = requests.get('https://api.openweathermap.org/data/2.5/weather',
+                        params=qs,
+                        timeout=REQUEST_TIMEOUT)
+    resp.raise_for_status()
     data = json.loads(resp.content)
     return str(data['weather'][0]['main'])
 
