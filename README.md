@@ -43,17 +43,24 @@ The setup commands above are derived from repository files. Legacy mobile, Pytho
 
 ## Running or Using the Project
 
-- No single runtime entry point was identified. Start by reading the source files and manifests listed above.
+- Run `python messenger.py $PORT` after installing dependencies and setting the required tokens.
 
 ## Testing and Verification
 
-- `python -m pytest` or the test runner used by the files above
+- `make verify` runs syntax checks and dependency-free webhook/API contract checks.
+- `make check` runs `make verify` with bytecode cleanup before and after.
+- `python3 scripts/check_weatherbot_contracts.py` runs just the webhook and outbound API contracts.
+- `python -m unittest test_messenger` runs the legacy test suite when Python 2 dependencies are installed.
 
 When the required SDK or runtime is unavailable, use static checks and source review first, then verify on a machine that has the matching platform toolchain.
 
 ## Configuration and Secrets
 
-- The scan found credential-adjacent names. Review configuration paths before running against real accounts.
+- `WIT_TOKEN` configures Wit.ai access.
+- `FB_PAGE_TOKEN` configures Facebook Messenger replies.
+- `FB_VERIFY_TOKEN` configures Messenger webhook verification.
+- `OPEN_WEATHER_TOKEN` configures OpenWeather lookup.
+- `REQUEST_TIMEOUT` optionally overrides outbound request timeout seconds.
 
 ## Security and Privacy Notes
 

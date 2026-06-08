@@ -19,10 +19,9 @@
 
 import os
 import requests
-import json
 from sys import argv
 from wit import Wit
-from bottle import Bottle, request, debug
+from bottle import Bottle, request, response, debug
 
 # Wit.ai parameters
 WIT_TOKEN = os.environ.get('WIT_TOKEN')
@@ -32,6 +31,9 @@ FB_PAGE_TOKEN = os.environ.get('FB_PAGE_TOKEN')
 FB_VERIFY_TOKEN = os.environ.get('FB_VERIFY_TOKEN')
 # Weather API
 OPEN_WEATHER_TOKEN = os.environ.get('OPEN_WEATHER_TOKEN')
+REQUEST_TIMEOUT = float(os.environ.get('REQUEST_TIMEOUT', '5'))
+FB_MESSAGES_URL = 'https://graph.facebook.com/me/messages'
+OPEN_WEATHER_URL = 'https://api.openweathermap.org/data/2.5/weather'
 
 # Setup Bottle Server
 debug(True)
@@ -51,6 +53,7 @@ def messenger_webhook():
         challenge = request.query.get('hub.challenge')
         return challenge
     else:
+        response.status = 403
         return 'Invalid Request or Verification Token'
 
 
@@ -61,25 +64,47 @@ def messenger_post():
     Handler for webhook (currently for postback and messages)
     """
     data = request.json
-    if data['object'] == 'page':
-        for entry in data['entry']:
-            # get all the messages
-            messages = entry['messaging']
-            if messages[0]:
-                # Get the first message
-                message = messages[0]
-                # Yay! We got a new message!
-                # We retrieve the Facebook user ID of the sender
-                fb_id = message['sender']['id']
-                # We retrieve the message content
-                text = message['message']['text']
-                # Let's forward the message to the Wit.ai Bot Engine
-                client.run_actions(session_id=fb_id, message=text)
-                # must send back response quickly
-    else:
+    if not isinstance(data, dict):
+        response.status = 400
+        return 'Invalid payload'
+
+    if data.get('object') != 'page':
         # Returned another event
         return 'Received Different Event'
-    return None
+
+    for fb_id, text in messenger_text_messages(data):
+        # Let's forward the message to the Wit.ai Bot Engine
+        client.run_actions(session_id=fb_id, message=text)
+
+    # must send back response quickly
+    return 'ok'
+
+
+def messenger_text_messages(data):
+    """
+    Extract supported Messenger sender/text pairs from a webhook payload.
+    """
+    messages = []
+    entries = data.get('entry')
+    if not isinstance(entries, list):
+        return messages
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        events = entry.get('messaging')
+        if not isinstance(events, list):
+            continue
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            sender = event.get('sender') or {}
+            message = event.get('message') or {}
+            fb_id = sender.get('id')
+            text = message.get('text')
+            if fb_id and text:
+                messages.append((fb_id, text))
+    return messages
 
 
 def fb_message(sender_id, text):
@@ -90,18 +115,20 @@ def fb_message(sender_id, text):
         'recipient': {'id': sender_id},
         'message': {'text': text}
     }
-    # Setup the query string with your PAGE TOKEN
-    qs = 'access_token=' + FB_PAGE_TOKEN
     # Send POST request to messenger
-    resp = requests.post('https://graph.facebook.com/me/messages?' + qs,
-                         json=data)
+    resp = requests.post(
+        FB_MESSAGES_URL,
+        json=data,
+        headers={'Authorization': 'Bearer {0}'.format(FB_PAGE_TOKEN or '')},
+        timeout=REQUEST_TIMEOUT)
     return resp.content
 
 
 def get_weather(text):
     qs = {'q': text, 'appid': OPEN_WEATHER_TOKEN}
-    resp = requests.get('http://api.openweathermap.org/data/2.5/weather', qs)
-    data = json.loads(resp.content)
+    resp = requests.get(OPEN_WEATHER_URL, params=qs, timeout=REQUEST_TIMEOUT)
+    resp.raise_for_status()
+    data = resp.json()
     return str(data['weather'][0]['main'])
 
 

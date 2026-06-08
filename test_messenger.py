@@ -1,5 +1,12 @@
 import unittest
 import json
+import os
+
+os.environ.setdefault('WIT_TOKEN', 'test-wit-token')
+os.environ.setdefault('FB_PAGE_TOKEN', 'test-page-token')
+os.environ.setdefault('FB_VERIFY_TOKEN', 'test-verify-token')
+os.environ.setdefault('OPEN_WEATHER_TOKEN', 'test-weather-token')
+
 import messenger
 from webtest import TestApp
 test_app = TestApp(messenger.app)
@@ -30,20 +37,96 @@ class TestMessenger(unittest.TestCase):
         """
         A test with a sample payload for the messenger bot.
         """
-        r = test_app.post_json('/webhook', self.data)
+        class FakeClient(object):
+            def __init__(self):
+                self.calls = []
+
+            def run_actions(self, session_id, message):
+                self.calls.append((session_id, message))
+
+        original_client = messenger.client
+        fake_client = FakeClient()
+        messenger.client = fake_client
+        try:
+            r = test_app.post_json('/webhook', self.data)
+        finally:
+            messenger.client = original_client
+
         self.assertEqual(r.status_int, 200)
+        self.assertEqual(fake_client.calls, [(self.user_id, 'hey')])
+
+    def test_facebook_delivery_event_is_ignored(self):
+        """
+        Delivery events should be acknowledged without calling Wit.
+        """
+        data = {'object': 'page',
+                'entry': [{'messaging': [{'sender': {'id': self.user_id},
+                                          'delivery': {'mids': ['mid-1']}}]}]}
+        r = test_app.post_json('/webhook', data)
+        self.assertEqual(r.status_int, 200)
+        self.assertEqual(r.body, 'ok')
+
+    def test_facebook_invalid_payload(self):
+        """
+        Invalid JSON payloads should not raise server errors.
+        """
+        r = test_app.post('/webhook', '', content_type='text/plain',
+                          expect_errors=True)
+        self.assertEqual(r.status_int, 400)
 
     def test_facebook_response(self):
         """
         A test to send a FB message test
         """
-        r = messenger.fb_message(self.user_id, "hello this is a test")
+        calls = []
+        original_post = messenger.requests.post
+
+        class FakeResponse(object):
+            def __init__(self, user_id):
+                self.content = json.dumps({'recipient_id': user_id})
+
+        def fake_post(url, **kwargs):
+            calls.append((url, kwargs))
+            return FakeResponse(self.user_id)
+
+        messenger.requests.post = fake_post
+        try:
+            r = messenger.fb_message(self.user_id, "hello this is a test")
+        finally:
+            messenger.requests.post = original_post
+
         self.assertTrue(len(r) >= 1)
         self.assertTrue(json.loads(r)['recipient_id'] == self.user_id)
+        self.assertTrue('access_token=' not in calls[0][0])
+        self.assertEqual(calls[0][1]['headers']['Authorization'],
+                         'Bearer ' + messenger.FB_PAGE_TOKEN)
+        self.assertEqual(calls[0][1]['timeout'], messenger.REQUEST_TIMEOUT)
 
     def test_weather(self):
-        weather = messenger.get_weather(self.location)
+        original_get = messenger.requests.get
+
+        class FakeResponse(object):
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {'weather': [{'main': 'Clouds'}]}
+
+        calls = []
+
+        def fake_get(url, **kwargs):
+            calls.append((url, kwargs))
+            return FakeResponse()
+
+        messenger.requests.get = fake_get
+        try:
+            weather = messenger.get_weather(self.location)
+        finally:
+            messenger.requests.get = original_get
+
         self.assertTrue(len(weather) >= 1)
+        self.assertEqual(calls[0][1]['params']['q'], self.location)
+        self.assertEqual(calls[0][1]['timeout'], messenger.REQUEST_TIMEOUT)
 
 
 if __name__ == '__main__':
