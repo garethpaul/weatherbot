@@ -6,6 +6,7 @@ import logging
 WIT_API_HOST = os.getenv('WIT_URL', 'https://api.wit.ai')
 WIT_API_VERSION = os.getenv('WIT_API_VERSION', '20160516')
 DEFAULT_MAX_STEPS = 5
+REQUEST_TIMEOUT = 10
 INTERACTIVE_PROMPT = '> '
 LEARN_MORE = 'Learn more at https://wit.ai/docs/quickstart'
 
@@ -16,6 +17,7 @@ class WitError(Exception):
 
 def req(logger, access_token, meth, path, params, **kwargs):
     full_url = WIT_API_HOST + path
+    timeout = kwargs.pop('timeout', REQUEST_TIMEOUT)
     logger.debug('%s %s %s', meth, full_url, params)
     rsp = requests.request(
         meth,
@@ -25,6 +27,7 @@ def req(logger, access_token, meth, path, params, **kwargs):
             'accept': 'application/vnd.wit.' + WIT_API_VERSION + '+json'
         },
         params=params,
+        timeout=timeout,
         **kwargs
     )
     if rsp.status_code > 200:

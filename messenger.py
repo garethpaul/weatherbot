@@ -32,9 +32,14 @@ FB_PAGE_TOKEN = os.environ.get('FB_PAGE_TOKEN')
 FB_VERIFY_TOKEN = os.environ.get('FB_VERIFY_TOKEN')
 # Weather API
 OPEN_WEATHER_TOKEN = os.environ.get('OPEN_WEATHER_TOKEN')
+REQUEST_TIMEOUT = 10
+
+
+def env_flag(name):
+    return os.environ.get(name, '').lower() in ('1', 'true', 'yes', 'on')
 
 # Setup Bottle Server
-debug(True)
+debug(env_flag('BOTTLE_DEBUG'))
 app = Bottle()
 
 
@@ -61,25 +66,29 @@ def messenger_post():
     Handler for webhook (currently for postback and messages)
     """
     data = request.json
-    if data['object'] == 'page':
-        for entry in data['entry']:
-            # get all the messages
-            messages = entry['messaging']
-            if messages[0]:
-                # Get the first message
-                message = messages[0]
-                # Yay! We got a new message!
-                # We retrieve the Facebook user ID of the sender
-                fb_id = message['sender']['id']
-                # We retrieve the message content
-                text = message['message']['text']
-                # Let's forward the message to the Wit.ai Bot Engine
-                client.run_actions(session_id=fb_id, message=text)
-                # must send back response quickly
-    else:
-        # Returned another event
+    if not isinstance(data, dict):
+        return 'Ignored Event'
+
+    if data.get('object') != 'page':
         return 'Received Different Event'
-    return None
+
+    for fb_id, text in messenger_messages(data):
+        client.run_actions(session_id=fb_id, message=text)
+
+    return 'ok'
+
+
+def messenger_messages(data):
+    for entry in data.get('entry') or []:
+        if not isinstance(entry, dict):
+            continue
+        for message in entry.get('messaging') or []:
+            if not isinstance(message, dict):
+                continue
+            fb_id = (message.get('sender') or {}).get('id')
+            text = (message.get('message') or {}).get('text')
+            if fb_id and text:
+                yield fb_id, text
 
 
 def fb_message(sender_id, text):
@@ -90,17 +99,21 @@ def fb_message(sender_id, text):
         'recipient': {'id': sender_id},
         'message': {'text': text}
     }
-    # Setup the query string with your PAGE TOKEN
-    qs = 'access_token=' + FB_PAGE_TOKEN
     # Send POST request to messenger
-    resp = requests.post('https://graph.facebook.com/me/messages?' + qs,
-                         json=data)
+    resp = requests.post('https://graph.facebook.com/me/messages',
+                         params={'access_token': FB_PAGE_TOKEN},
+                         json=data,
+                         timeout=REQUEST_TIMEOUT)
+    resp.raise_for_status()
     return resp.content
 
 
 def get_weather(text):
     qs = {'q': text, 'appid': OPEN_WEATHER_TOKEN}
-    resp = requests.get('http://api.openweathermap.org/data/2.5/weather', qs)
+    resp = requests.get('https://api.openweathermap.org/data/2.5/weather',
+                        params=qs,
+                        timeout=REQUEST_TIMEOUT)
+    resp.raise_for_status()
     data = json.loads(resp.content)
     return str(data['weather'][0]['main'])
 
