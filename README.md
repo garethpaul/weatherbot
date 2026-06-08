@@ -1,11 +1,77 @@
 # weatherbot
 
-<!-- README-OVERVIEW-IMAGE -->
-![Project overview](docs/readme-overview.svg)
+## Overview
 
+`garethpaul/weatherbot` is a Python web API or service project. A chat bot for the weather
 
-<img src="screenshots/logoBot.png" width="350" style="display:inline"/>
+This README is based on the checked-in source, manifests, scripts, and repository metadata on the `master` branch. The project language mix found during review was: Python (3).
 
-A chatbot for the weather.
+## Repository Contents
 
-<img src="screenshots/screenshot01.png" width="240" style="width:240px; margin-top:15px" />
+- `README.md` - project overview and local usage notes
+- `requirements.txt` - Python dependency or packaging metadata
+- `Procfile`
+- `SECURITY.md` - security reporting and disclosure guidance
+- `VISION.md` - project direction and maintenance guardrails
+
+Additional scan context:
+
+- Source directories: no top-level source directories detected
+- Dependency and build manifests: Procfile, requirements.txt
+- Entry points or build surfaces: none detected
+- Test-looking files: test_messenger.py
+
+## Getting Started
+
+### Prerequisites
+
+- Git
+- Python matching the era of the project
+
+### Setup
+
+```bash
+git clone https://github.com/garethpaul/weatherbot.git
+cd weatherbot
+python -m pip install -r requirements.txt
+```
+
+The setup commands above are derived from repository files. Legacy mobile, Python, or JavaScript samples may require older SDKs or package versions than a modern workstation uses by default.
+
+## Running or Using the Project
+
+- No single runtime entry point was identified. Start by reading the source files and manifests listed above.
+
+## Testing and Verification
+
+- `python -m pytest` or the test runner used by the files above
+
+When the required SDK or runtime is unavailable, use static checks and source review first, then verify on a machine that has the matching platform toolchain.
+
+## Configuration and Secrets
+
+- The scan found credential-adjacent names. Review configuration paths before running against real accounts.
+
+## Security and Privacy Notes
+
+- Review changes touching authentication or token handling; examples from the scan include messenger.py, wit.py.
+- Review changes touching external API calls or credential-adjacent configuration; examples from the scan include messenger.py, wit.py.
+- Review changes touching network requests, sockets, or service endpoints; examples from the scan include messenger.py, wit.py.
+- Review changes touching file, media, JSON, XML, CSV, OCR, or data parsing; examples from the scan include messenger.py, test_messenger.py, wit.py.
+- Review changes touching infrastructure, proxy, cloud, or deployment configuration; examples from the scan include messenger.py.
+
+## Maintenance Notes
+
+- See `SECURITY.md` for vulnerability reporting and safe research guidance.
+- See `VISION.md` for project direction and contribution guardrails.
+
+## Contributing
+
+Keep changes small and tied to the project that is already present in this repository. For code changes, document the toolchain used, avoid committing generated dependency directories or local configuration, and update this README when setup or verification steps change.
+
+## Existing Project Notes
+
+Prior README summary:
+
+> weatherbot <!-- README-OVERVIEW-IMAGE --> A chatbot for the weather.
+
