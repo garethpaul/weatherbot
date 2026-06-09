@@ -2,6 +2,7 @@
 
 ## 2026-06-08
 
+- Made Messenger webhook verification fail closed when the verify token is unset or the challenge is missing.
 - Tightened docs-plan verification to require recorded `make check` evidence.
 - Added a local `make verify` gate with dependency-free webhook and API client contract checks.
 - Validated Messenger webhook JSON before reading nested message fields.

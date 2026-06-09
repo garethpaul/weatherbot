@@ -78,6 +78,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
 - See `VISION.md` for project direction and contribution guardrails.
 - See `docs/plans/2026-06-08-weatherbot-webhook-api-hardening.md` for the
   current webhook and API client hardening baseline.
+- See `docs/plans/2026-06-08-weatherbot-verify-token-fails-closed.md` for the
+  Messenger verify-token fail-closed contract.
 
 ## Contributing
 

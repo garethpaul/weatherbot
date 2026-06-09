@@ -18,6 +18,7 @@
 # 6. Talk to your bot on Messenger!
 
 import os
+import hmac
 import requests
 from sys import argv
 from wit import Wit
@@ -48,13 +49,35 @@ def messenger_webhook():
     """
     verify_token = request.query.get('hub.verify_token')
     # check whether the verify tokens match
-    if verify_token == FB_VERIFY_TOKEN:
-        # respond with the challenge to confirm
-        challenge = request.query.get('hub.challenge')
-        return challenge
-    else:
+    if not secure_compare(verify_token, FB_VERIFY_TOKEN):
         response.status = 403
         return 'Invalid Request or Verification Token'
+
+    # respond with the challenge to confirm
+    challenge = request.query.get('hub.challenge')
+    if not challenge:
+        response.status = 400
+        return 'Missing challenge'
+    return challenge
+
+
+def secure_compare(left, right):
+    if not (left and right):
+        return False
+
+    left = str(left)
+    right = str(right)
+    compare_digest = getattr(hmac, 'compare_digest', None)
+    if compare_digest:
+        return compare_digest(left, right)
+
+    if len(left) != len(right):
+        return False
+
+    result = 0
+    for left_char, right_char in zip(left, right):
+        result |= ord(left_char) ^ ord(right_char)
+    return result == 0
 
 
 # Facebook Messenger POST Webhook

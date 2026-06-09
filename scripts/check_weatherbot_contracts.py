@@ -9,7 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-08-weatherbot-webhook-api-hardening.md"
+WEBHOOK_API_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-08-weatherbot-webhook-api-hardening.md"
+VERIFY_TOKEN_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-08-weatherbot-verify-token-fails-closed.md"
 
 
 class FakeBottle:
@@ -91,6 +92,7 @@ def load_messenger():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     module.FB_PAGE_TOKEN = "page-token"
+    module.FB_VERIFY_TOKEN = "verify-token"
     module.OPEN_WEATHER_TOKEN = "weather-token"
     module.REQUEST_TIMEOUT = 5
     calls = []
@@ -120,6 +122,55 @@ def test_messenger_post_rejects_invalid_json_shape():
 
     assert_equal(response.status, 400, "invalid json status")
     assert_true(body != "ok", "invalid json must not be acknowledged as valid")
+
+
+def test_messenger_verification_rejects_missing_configured_token():
+    messenger, request, response, _requests, _calls = load_messenger()
+
+    messenger.FB_VERIFY_TOKEN = None
+    request.query = {"hub.challenge": "challenge-1"}
+    response.status = 200
+
+    body = messenger.messenger_webhook()
+
+    assert_equal(response.status, 403, "missing configured verify token status")
+    assert_true(body != "challenge-1", "missing configured token must not echo challenge")
+
+
+def test_messenger_verification_rejects_wrong_token():
+    messenger, request, response, _requests, _calls = load_messenger()
+
+    request.query = {"hub.challenge": "challenge-1", "hub.verify_token": "wrong"}
+    response.status = 200
+
+    body = messenger.messenger_webhook()
+
+    assert_equal(response.status, 403, "wrong verify token status")
+    assert_true(body != "challenge-1", "wrong verify token must not echo challenge")
+
+
+def test_messenger_verification_accepts_matching_token():
+    messenger, request, response, _requests, _calls = load_messenger()
+
+    request.query = {"hub.challenge": "challenge-1", "hub.verify_token": "verify-token"}
+    response.status = 200
+
+    body = messenger.messenger_webhook()
+
+    assert_equal(body, "challenge-1", "matching verify token challenge")
+    assert_equal(response.status, 200, "matching verify token status")
+
+
+def test_messenger_verification_requires_challenge():
+    messenger, request, response, _requests, _calls = load_messenger()
+
+    request.query = {"hub.verify_token": "verify-token"}
+    response.status = 200
+
+    body = messenger.messenger_webhook()
+
+    assert_equal(response.status, 400, "missing challenge status")
+    assert_true(body != "challenge-1", "missing challenge must not echo challenge")
 
 
 def test_messenger_post_ignores_non_message_events():
@@ -207,22 +258,31 @@ def test_wit_requests_use_timeout():
     assert_equal(kwargs.get("timeout"), 5, "wit request timeout")
 
 
-def test_completed_plan_is_in_docs_plans():
-    assert_true(PLAN_PATH.is_file(), "weatherbot hardening plan must live under docs/plans")
-    plan_text = PLAN_PATH.read_text()
-    assert_true("status: completed" in plan_text.lower(), "weatherbot hardening plan must be completed")
-    assert_true("make check" in plan_text, "weatherbot hardening plan must document make check verification")
+def assert_completed_plan(path, label):
+    assert_true(path.is_file(), "{0} plan must live under docs/plans".format(label))
+    plan_text = path.read_text()
+    assert_true("status: completed" in plan_text.lower(), "{0} plan must be completed".format(label))
+    assert_true("make check" in plan_text, "{0} plan must document make check verification".format(label))
+
+
+def test_completed_plans_are_in_docs_plans():
+    assert_completed_plan(WEBHOOK_API_PLAN_PATH, "weatherbot hardening")
+    assert_completed_plan(VERIFY_TOKEN_PLAN_PATH, "weatherbot verify token")
 
 
 def main():
     tests = [
         test_messenger_post_rejects_invalid_json_shape,
+        test_messenger_verification_rejects_missing_configured_token,
+        test_messenger_verification_rejects_wrong_token,
+        test_messenger_verification_accepts_matching_token,
+        test_messenger_verification_requires_challenge,
         test_messenger_post_ignores_non_message_events,
         test_messenger_post_routes_text_messages_to_wit,
         test_fb_message_uses_header_auth_and_timeout,
         test_weather_lookup_uses_https_params_and_timeout,
         test_wit_requests_use_timeout,
-        test_completed_plan_is_in_docs_plans,
+        test_completed_plans_are_in_docs_plans,
     ]
     for test in tests:
         test()
