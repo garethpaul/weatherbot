@@ -47,7 +47,8 @@ The setup commands above are derived from repository files. Legacy mobile, Pytho
 
 ## Testing and Verification
 
-- `make verify` runs syntax checks and dependency-free webhook/API contract checks.
+- `make verify` runs syntax checks and dependency-free webhook, Wit action, and
+  outbound API contract checks.
 - `make check` runs `make verify` with bytecode cleanup before and after.
 - `python3 scripts/check_weatherbot_contracts.py` runs just the webhook and outbound API contracts.
 - Completed maintenance plans live under `docs/plans` and are checked by
@@ -80,6 +81,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   current webhook and API client hardening baseline.
 - See `docs/plans/2026-06-08-weatherbot-verify-token-fails-closed.md` for the
   Messenger verify-token fail-closed contract.
+- See `docs/plans/2026-06-08-weatherbot-wit-entity-shape.md` for malformed Wit
+  entity handling in forecast actions.
 
 ## Contributing
 

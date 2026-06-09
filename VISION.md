@@ -16,13 +16,14 @@ Priority:
 - Preserve Messenger webhook verification and message handling
 - Keep Wit, Facebook, and weather tokens in environment variables
 - Make weather lookup and response flow easy to trace
+- Treat malformed Wit entities as missing user location
 - Treat Python and API versions as legacy until documented
 
 Next priorities:
 
 - Add README setup notes for each token and webhook endpoint
-- Validate inbound Messenger payloads before indexing fields
-- Add mocked tests for Wit actions and weather lookup
+- Validate OpenWeather JSON response shape before reading conditions
+- Add user-facing fallback text for weather lookup failures
 - Avoid debug logging of user messages by default
 
 Contribution rules:

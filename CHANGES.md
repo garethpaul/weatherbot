@@ -2,6 +2,8 @@
 
 ## 2026-06-08
 
+- Treated missing or malformed Wit location entities as missing-location
+  forecast input instead of raising during webhook handling.
 - Made Messenger webhook verification fail closed when the verify token is unset or the challenge is missing.
 - Tightened docs-plan verification to require recorded `make check` evidence.
 - Added a local `make verify` gate with dependency-free webhook and API client contract checks.

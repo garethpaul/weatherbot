@@ -159,9 +159,18 @@ def first_entity_value(entities, entity):
     """
     Returns first entity value
     """
-    if entity not in entities:
+    if not isinstance(entities, dict):
         return None
-    val = entities[entity][0]['value']
+
+    values = entities.get(entity)
+    if not isinstance(values, list) or not values:
+        return None
+
+    first_value = values[0]
+    if not isinstance(first_value, dict):
+        return None
+
+    val = first_value.get('value')
     if not val:
         return None
     return val['value'] if isinstance(val, dict) else val
