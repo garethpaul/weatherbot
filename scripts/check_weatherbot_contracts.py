@@ -19,6 +19,9 @@ DEBUG_MODE_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-09-weatherbot-debug-mo
 MESSENGER_TEXT_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-09-weatherbot-messenger-text-normalization.md"
 )
+MESSENGER_SENDER_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-09-weatherbot-messenger-sender-normalization.md"
+)
 WIT_LOG_PRIVACY_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-09-weatherbot-wit-log-privacy.md"
 )
@@ -324,6 +327,47 @@ def test_messenger_post_trims_message_text():
     assert_equal(calls, [("user-1", "weather in Yountville")], "trimmed Wit action call")
 
 
+def test_messenger_post_ignores_invalid_sender_ids():
+    invalid_sender_ids = [None, "", " \t\n", {"id": "user-1"}, ["user-1"]]
+    for sender_id in invalid_sender_ids:
+        messenger, request, response, _requests, calls = load_messenger()
+        request.json = {
+            "object": "page",
+            "entry": [{
+                "messaging": [{
+                    "sender": {"id": sender_id},
+                    "message": {"text": "weather in Yountville"},
+                }]
+            }],
+        }
+        response.status = 200
+
+        body = messenger.messenger_post()
+
+        assert_equal(body, "ok", "invalid sender id event response")
+        assert_equal(calls, [], "invalid Messenger sender IDs must not call Wit actions")
+
+
+def test_messenger_post_trims_sender_id():
+    messenger, request, response, _requests, calls = load_messenger()
+
+    request.json = {
+        "object": "page",
+        "entry": [{
+            "messaging": [{
+                "sender": {"id": " user-1 "},
+                "message": {"text": "weather in Yountville"},
+            }]
+        }],
+    }
+    response.status = 200
+
+    body = messenger.messenger_post()
+
+    assert_equal(body, "ok", "trimmed sender id event response")
+    assert_equal(calls, [("user-1", "weather in Yountville")], "trimmed sender id Wit call")
+
+
 def test_fb_message_uses_header_auth_and_timeout():
     messenger, _request, _response, requests, _calls = load_messenger()
 
@@ -539,6 +583,7 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(REQUEST_TIMEOUT_PLAN_PATH, "weatherbot request timeout")
     assert_completed_plan(DEBUG_MODE_PLAN_PATH, "weatherbot debug mode")
     assert_completed_plan(MESSENGER_TEXT_PLAN_PATH, "weatherbot Messenger text normalization")
+    assert_completed_plan(MESSENGER_SENDER_PLAN_PATH, "weatherbot Messenger sender normalization")
     assert_completed_plan(WIT_LOG_PRIVACY_PLAN_PATH, "weatherbot Wit log privacy")
     assert_completed_plan(WEATHER_EXCEPTION_PLAN_PATH, "weatherbot weather exception fallback")
 
@@ -554,6 +599,8 @@ def main():
         test_messenger_post_routes_text_messages_to_wit,
         test_messenger_post_ignores_blank_message_text,
         test_messenger_post_trims_message_text,
+        test_messenger_post_ignores_invalid_sender_ids,
+        test_messenger_post_trims_sender_id,
         test_fb_message_uses_header_auth_and_timeout,
         test_weather_lookup_uses_https_params_and_timeout,
         test_weather_lookup_handles_malformed_results,

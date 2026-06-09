@@ -2,6 +2,10 @@
 
 ## 2026-06-09
 
+- Rejected blank or non-text Messenger sender IDs and trimmed accepted sender
+  IDs before using them as Wit session IDs.
+- Added dependency-free contract coverage for Messenger sender ID
+  normalization.
 - Treated OpenWeather lookup exceptions as missing forecasts instead of letting
   them abort forecast action handling.
 - Added dependency-free contract coverage for weather lookup exception fallback.

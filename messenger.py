@@ -142,15 +142,24 @@ def messenger_text_messages(data):
                 continue
             sender = event.get('sender') or {}
             message = event.get('message') or {}
-            fb_id = sender.get('id')
-            text = message.get('text')
-            try:
-                text = text.strip()
-            except AttributeError:
-                continue
+            fb_id = clean_text_value(sender.get('id'))
+            text = clean_text_value(message.get('text'))
             if fb_id and text:
                 messages.append((fb_id, text))
     return messages
+
+
+def clean_text_value(value):
+    try:
+        text_types = (basestring,)
+    except NameError:
+        text_types = (str,)
+
+    if not isinstance(value, text_types):
+        return None
+
+    value = value.strip()
+    return value or None
 
 
 def fb_message(sender_id, text):
