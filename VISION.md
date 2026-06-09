@@ -15,6 +15,7 @@ Priority:
 
 - Preserve Messenger webhook verification and message handling
 - Keep Wit, Facebook, and weather tokens in environment variables
+- Reject blank Messenger message text before Wit action handling
 - Make weather lookup and response flow easy to trace
 - Treat malformed Wit entities as missing user location
 - Treat malformed OpenWeather results as missing forecasts

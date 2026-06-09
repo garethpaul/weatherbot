@@ -16,6 +16,9 @@ WIT_ENTITY_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-08-weatherbot-wit-enti
 WEATHER_RESULT_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-09-weatherbot-weather-result-shape.md"
 REQUEST_TIMEOUT_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-09-weatherbot-request-timeout.md"
 DEBUG_MODE_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-09-weatherbot-debug-mode.md"
+MESSENGER_TEXT_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-09-weatherbot-messenger-text-normalization.md"
+)
 
 
 class FakeBottle:
@@ -275,6 +278,46 @@ def test_messenger_post_routes_text_messages_to_wit():
     assert_equal(calls, [("user-1", "weather in Yountville")], "Wit action call")
 
 
+def test_messenger_post_ignores_blank_message_text():
+    messenger, request, response, _requests, calls = load_messenger()
+
+    request.json = {
+        "object": "page",
+        "entry": [{
+            "messaging": [{
+                "sender": {"id": "user-1"},
+                "message": {"text": "   "},
+            }]
+        }],
+    }
+    response.status = 200
+
+    body = messenger.messenger_post()
+
+    assert_equal(body, "ok", "blank message event response")
+    assert_equal(calls, [], "blank Messenger text must not call Wit actions")
+
+
+def test_messenger_post_trims_message_text():
+    messenger, request, response, _requests, calls = load_messenger()
+
+    request.json = {
+        "object": "page",
+        "entry": [{
+            "messaging": [{
+                "sender": {"id": "user-1"},
+                "message": {"text": "  weather in Yountville  "},
+            }]
+        }],
+    }
+    response.status = 200
+
+    body = messenger.messenger_post()
+
+    assert_equal(body, "ok", "trimmed message event response")
+    assert_equal(calls, [("user-1", "weather in Yountville")], "trimmed Wit action call")
+
+
 def test_fb_message_uses_header_auth_and_timeout():
     messenger, _request, _response, requests, _calls = load_messenger()
 
@@ -447,6 +490,7 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(WEATHER_RESULT_PLAN_PATH, "weatherbot weather result shape")
     assert_completed_plan(REQUEST_TIMEOUT_PLAN_PATH, "weatherbot request timeout")
     assert_completed_plan(DEBUG_MODE_PLAN_PATH, "weatherbot debug mode")
+    assert_completed_plan(MESSENGER_TEXT_PLAN_PATH, "weatherbot Messenger text normalization")
 
 
 def main():
@@ -458,6 +502,8 @@ def main():
         test_messenger_verification_requires_challenge,
         test_messenger_post_ignores_non_message_events,
         test_messenger_post_routes_text_messages_to_wit,
+        test_messenger_post_ignores_blank_message_text,
+        test_messenger_post_trims_message_text,
         test_fb_message_uses_header_auth_and_timeout,
         test_weather_lookup_uses_https_params_and_timeout,
         test_weather_lookup_handles_malformed_results,

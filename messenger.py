@@ -144,6 +144,10 @@ def messenger_text_messages(data):
             message = event.get('message') or {}
             fb_id = sender.get('id')
             text = message.get('text')
+            try:
+                text = text.strip()
+            except AttributeError:
+                continue
             if fb_id and text:
                 messages.append((fb_id, text))
     return messages
