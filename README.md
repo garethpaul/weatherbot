@@ -65,6 +65,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
 - `OPEN_WEATHER_TOKEN` configures OpenWeather lookup.
 - `REQUEST_TIMEOUT` optionally overrides outbound request timeout seconds;
   invalid, non-finite, or non-positive values fall back to `5.0`.
+- `WEATHERBOT_DEBUG=1` enables Bottle debug mode for local development; it is
+  disabled by default.
 
 ## Security and Privacy Notes
 
@@ -88,6 +90,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   OpenWeather result handling.
 - See `docs/plans/2026-06-09-weatherbot-request-timeout.md` for bounded
   request timeout environment parsing.
+- See `docs/plans/2026-06-09-weatherbot-debug-mode.md` for the opt-in Bottle
+  debug-mode guard.
 
 ## Contributing
 

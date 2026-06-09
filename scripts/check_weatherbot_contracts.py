@@ -15,6 +15,7 @@ VERIFY_TOKEN_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-08-weatherbot-verify
 WIT_ENTITY_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-08-weatherbot-wit-entity-shape.md"
 WEATHER_RESULT_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-09-weatherbot-weather-result-shape.md"
 REQUEST_TIMEOUT_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-09-weatherbot-request-timeout.md"
+DEBUG_MODE_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-09-weatherbot-debug-mode.md"
 
 
 class FakeBottle:
@@ -78,10 +79,15 @@ def install_stubs():
     requests = FakeRequests()
 
     bottle = types.ModuleType("bottle")
+    bottle.debug_calls = []
     bottle.Bottle = lambda: FakeBottle()
     bottle.request = request
     bottle.response = response
-    bottle.debug = lambda _enabled: None
+
+    def debug(enabled):
+        bottle.debug_calls.append(enabled)
+
+    bottle.debug = debug
 
     sys.modules["bottle"] = bottle
     sys.modules["requests"] = requests
@@ -130,6 +136,32 @@ def load_timeout_values(value):
             os.environ.pop("REQUEST_TIMEOUT", None)
         else:
             os.environ["REQUEST_TIMEOUT"] = original
+
+
+def load_debug_values(value):
+    original = os.environ.get("WEATHERBOT_DEBUG")
+    if value is None:
+        os.environ.pop("WEATHERBOT_DEBUG", None)
+    else:
+        os.environ["WEATHERBOT_DEBUG"] = value
+
+    try:
+        install_stubs()
+        for module_name in ("weatherbot_debug_messenger", "wit"):
+            sys.modules.pop(module_name, None)
+        spec = importlib.util.spec_from_file_location(
+            "weatherbot_debug_messenger", str(ROOT / "messenger.py")
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return list(sys.modules["bottle"].debug_calls)
+    finally:
+        sys.modules.pop("weatherbot_debug_messenger", None)
+        sys.modules.pop("wit", None)
+        if original is None:
+            os.environ.pop("WEATHERBOT_DEBUG", None)
+        else:
+            os.environ["WEATHERBOT_DEBUG"] = original
 
 
 def assert_equal(actual, expected, label):
@@ -316,6 +348,18 @@ def test_request_timeout_defaults_for_invalid_env():
         assert_equal(wit_timeout, 5.0, "wit invalid REQUEST_TIMEOUT {0!r}".format(value))
 
 
+def test_bottle_debug_is_disabled_by_default():
+    assert_equal(load_debug_values(None), [False], "default Bottle debug flag")
+
+
+def test_bottle_debug_requires_truthy_env_flag():
+    for value in ("1", "true", "TRUE", "yes", "on"):
+        assert_equal(load_debug_values(value), [True], "truthy WEATHERBOT_DEBUG {0!r}".format(value))
+
+    for value in ("", "0", "false", "no", "off", "debug"):
+        assert_equal(load_debug_values(value), [False], "falsey WEATHERBOT_DEBUG {0!r}".format(value))
+
+
 def test_wit_requests_use_timeout():
     _messenger, _request, _response, requests, _calls = load_messenger()
     wit = sys.modules["wit"]
@@ -402,6 +446,7 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(WIT_ENTITY_PLAN_PATH, "weatherbot Wit entity shape")
     assert_completed_plan(WEATHER_RESULT_PLAN_PATH, "weatherbot weather result shape")
     assert_completed_plan(REQUEST_TIMEOUT_PLAN_PATH, "weatherbot request timeout")
+    assert_completed_plan(DEBUG_MODE_PLAN_PATH, "weatherbot debug mode")
 
 
 def main():
@@ -418,6 +463,8 @@ def main():
         test_weather_lookup_handles_malformed_results,
         test_request_timeout_accepts_positive_float_env,
         test_request_timeout_defaults_for_invalid_env,
+        test_bottle_debug_is_disabled_by_default,
+        test_bottle_debug_requires_truthy_env_flag,
         test_wit_requests_use_timeout,
         test_first_entity_value_handles_malformed_entities,
         test_get_forecast_handles_missing_entities,

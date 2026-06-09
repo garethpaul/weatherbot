@@ -19,6 +19,7 @@ Priority:
 - Treat malformed Wit entities as missing user location
 - Treat malformed OpenWeather results as missing forecasts
 - Keep outbound request timeout configuration bounded and non-crashing
+- Keep Bottle debug mode disabled unless explicitly enabled locally
 - Treat Python and API versions as legacy until documented
 
 Next priorities:

@@ -48,10 +48,15 @@ def positive_float_from_env(name, default):
     return value
 
 
+def truthy_env(name):
+    value = os.environ.get(name, '')
+    return value.strip().lower() in ('1', 'true', 'yes', 'on')
+
+
 REQUEST_TIMEOUT = positive_float_from_env('REQUEST_TIMEOUT', 5.0)
 
 # Setup Bottle Server
-debug(True)
+debug(truthy_env('WEATHERBOT_DEBUG'))
 app = Bottle()
 
 

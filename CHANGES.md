@@ -2,6 +2,9 @@
 
 ## 2026-06-09
 
+- Disabled Bottle debug mode by default and made it opt-in with
+  `WEATHERBOT_DEBUG`.
+- Added dependency-free contract coverage for debug-mode environment parsing.
 - Added safe `REQUEST_TIMEOUT` parsing for Messenger, Wit, and OpenWeather
   requests so invalid, non-finite, or non-positive values fall back to five
   seconds.
