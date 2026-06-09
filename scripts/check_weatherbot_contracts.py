@@ -28,6 +28,9 @@ WIT_LOG_PRIVACY_PLAN_PATH = (
 WEATHER_EXCEPTION_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-09-weatherbot-weather-exception-fallback.md"
 )
+MESSENGER_OBJECT_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-09-weatherbot-messenger-object-guard.md"
+)
 
 
 class FakeBottle:
@@ -196,6 +199,27 @@ def test_messenger_post_rejects_invalid_json_shape():
 
     assert_equal(response.status, 400, "invalid json status")
     assert_true(body != "ok", "invalid json must not be acknowledged as valid")
+
+
+def test_messenger_post_rejects_non_page_object():
+    messenger, request, response, _requests, calls = load_messenger()
+
+    request.json = {
+        "object": "user",
+        "entry": [{
+            "messaging": [{
+                "sender": {"id": "user-1"},
+                "message": {"text": "weather in Yountville"},
+            }]
+        }],
+    }
+    response.status = 200
+
+    body = messenger.messenger_post()
+
+    assert_equal(response.status, 400, "non-page Messenger object status")
+    assert_true(body != "ok", "non-page Messenger objects must not be acknowledged as valid")
+    assert_equal(calls, [], "non-page Messenger objects must not call Wit actions")
 
 
 def test_messenger_verification_rejects_missing_configured_token():
@@ -586,11 +610,13 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(MESSENGER_SENDER_PLAN_PATH, "weatherbot Messenger sender normalization")
     assert_completed_plan(WIT_LOG_PRIVACY_PLAN_PATH, "weatherbot Wit log privacy")
     assert_completed_plan(WEATHER_EXCEPTION_PLAN_PATH, "weatherbot weather exception fallback")
+    assert_completed_plan(MESSENGER_OBJECT_PLAN_PATH, "weatherbot Messenger object guard")
 
 
 def main():
     tests = [
         test_messenger_post_rejects_invalid_json_shape,
+        test_messenger_post_rejects_non_page_object,
         test_messenger_verification_rejects_missing_configured_token,
         test_messenger_verification_rejects_wrong_token,
         test_messenger_verification_accepts_matching_token,

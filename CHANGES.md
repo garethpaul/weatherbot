@@ -2,6 +2,9 @@
 
 ## 2026-06-09
 
+- Rejected non-page Messenger webhook payloads with HTTP 400 before event
+  parsing or Wit action handling.
+- Added dependency-free contract coverage for Messenger object validation.
 - Rejected blank or non-text Messenger sender IDs and trimmed accepted sender
   IDs before using them as Wit session IDs.
 - Added dependency-free contract coverage for Messenger sender ID

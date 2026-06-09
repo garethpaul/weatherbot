@@ -112,7 +112,8 @@ def messenger_post():
 
     if data.get('object') != 'page':
         # Returned another event
-        return 'Received Different Event'
+        response.status = 400
+        return 'Invalid payload'
 
     for fb_id, text in messenger_text_messages(data):
         # Let's forward the message to the Wit.ai Bot Engine

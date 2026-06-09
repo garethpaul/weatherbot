@@ -15,6 +15,7 @@ Priority:
 
 - Preserve Messenger webhook verification and message handling
 - Keep Wit, Facebook, and weather tokens in environment variables
+- Reject non-page Messenger webhook payloads before Wit action handling
 - Reject blank or non-text Messenger sender IDs before Wit action handling
 - Reject blank Messenger message text before Wit action handling
 - Make weather lookup and response flow easy to trace
@@ -54,6 +55,7 @@ API calls explicit.
 - Checked-in platform tokens
 - Private conversation logs
 - Unverified webhook processing
+- Messenger webhook payloads that bypass page-object validation
 - Live API tests as the only verification path
 
 This list is a roadmap guardrail, not a permanent rule.
