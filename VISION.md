@@ -18,6 +18,7 @@ Priority:
 - Make weather lookup and response flow easy to trace
 - Treat malformed Wit entities as missing user location
 - Treat malformed OpenWeather results as missing forecasts
+- Keep outbound request timeout configuration bounded and non-crashing
 - Treat Python and API versions as legacy until documented
 
 Next priorities:

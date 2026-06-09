@@ -48,7 +48,7 @@ The setup commands above are derived from repository files. Legacy mobile, Pytho
 ## Testing and Verification
 
 - `make verify` runs syntax checks and dependency-free webhook, Wit action,
-  OpenWeather shape, and outbound API contract checks.
+  OpenWeather shape, request timeout, and outbound API contract checks.
 - `make check` runs `make verify` with bytecode cleanup before and after.
 - `python3 scripts/check_weatherbot_contracts.py` runs just the webhook and outbound API contracts.
 - Completed maintenance plans live under `docs/plans` and are checked by
@@ -63,7 +63,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
 - `FB_PAGE_TOKEN` configures Facebook Messenger replies.
 - `FB_VERIFY_TOKEN` configures Messenger webhook verification.
 - `OPEN_WEATHER_TOKEN` configures OpenWeather lookup.
-- `REQUEST_TIMEOUT` optionally overrides outbound request timeout seconds.
+- `REQUEST_TIMEOUT` optionally overrides outbound request timeout seconds;
+  invalid, non-finite, or non-positive values fall back to `5.0`.
 
 ## Security and Privacy Notes
 
@@ -85,6 +86,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   entity handling in forecast actions.
 - See `docs/plans/2026-06-09-weatherbot-weather-result-shape.md` for malformed
   OpenWeather result handling.
+- See `docs/plans/2026-06-09-weatherbot-request-timeout.md` for bounded
+  request timeout environment parsing.
 
 ## Contributing
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Dependency-free route and API contract checks for weatherbot."""
 import importlib.util
+import os
 import sys
 import types
 from pathlib import Path
@@ -13,6 +14,7 @@ WEBHOOK_API_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-08-weatherbot-webhook
 VERIFY_TOKEN_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-08-weatherbot-verify-token-fails-closed.md"
 WIT_ENTITY_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-08-weatherbot-wit-entity-shape.md"
 WEATHER_RESULT_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-09-weatherbot-weather-result-shape.md"
+REQUEST_TIMEOUT_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-09-weatherbot-request-timeout.md"
 
 
 class FakeBottle:
@@ -102,6 +104,32 @@ def load_messenger():
         run_actions=lambda session_id, message: calls.append((session_id, message))
     )
     return module, request, response, requests, calls
+
+
+def load_timeout_values(value):
+    original = os.environ.get("REQUEST_TIMEOUT")
+    if value is None:
+        os.environ.pop("REQUEST_TIMEOUT", None)
+    else:
+        os.environ["REQUEST_TIMEOUT"] = value
+
+    try:
+        install_stubs()
+        for module_name in ("weatherbot_timeout_messenger", "wit"):
+            sys.modules.pop(module_name, None)
+        spec = importlib.util.spec_from_file_location(
+            "weatherbot_timeout_messenger", str(ROOT / "messenger.py")
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.REQUEST_TIMEOUT, sys.modules["wit"].DEFAULT_REQUEST_TIMEOUT
+    finally:
+        sys.modules.pop("weatherbot_timeout_messenger", None)
+        sys.modules.pop("wit", None)
+        if original is None:
+            os.environ.pop("REQUEST_TIMEOUT", None)
+        else:
+            os.environ["REQUEST_TIMEOUT"] = original
 
 
 def assert_equal(actual, expected, label):
@@ -269,6 +297,25 @@ def test_weather_lookup_handles_malformed_results():
         assert_equal(messenger.get_weather("Yountville"), None, "malformed weather response")
 
 
+def test_request_timeout_accepts_positive_float_env():
+    messenger_timeout, wit_timeout = load_timeout_values("2.5")
+
+    assert_equal(messenger_timeout, 2.5, "messenger positive REQUEST_TIMEOUT env")
+    assert_equal(wit_timeout, 2.5, "wit positive REQUEST_TIMEOUT env")
+
+
+def test_request_timeout_defaults_for_invalid_env():
+    for value in ("not-a-number", "0", "-3", "nan", "inf"):
+        try:
+            messenger_timeout, wit_timeout = load_timeout_values(value)
+        except Exception as exc:
+            raise AssertionError(
+                "invalid REQUEST_TIMEOUT must not crash imports: {0}".format(exc)
+            )
+        assert_equal(messenger_timeout, 5.0, "messenger invalid REQUEST_TIMEOUT {0!r}".format(value))
+        assert_equal(wit_timeout, 5.0, "wit invalid REQUEST_TIMEOUT {0!r}".format(value))
+
+
 def test_wit_requests_use_timeout():
     _messenger, _request, _response, requests, _calls = load_messenger()
     wit = sys.modules["wit"]
@@ -354,6 +401,7 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(VERIFY_TOKEN_PLAN_PATH, "weatherbot verify token")
     assert_completed_plan(WIT_ENTITY_PLAN_PATH, "weatherbot Wit entity shape")
     assert_completed_plan(WEATHER_RESULT_PLAN_PATH, "weatherbot weather result shape")
+    assert_completed_plan(REQUEST_TIMEOUT_PLAN_PATH, "weatherbot request timeout")
 
 
 def main():
@@ -368,6 +416,8 @@ def main():
         test_fb_message_uses_header_auth_and_timeout,
         test_weather_lookup_uses_https_params_and_timeout,
         test_weather_lookup_handles_malformed_results,
+        test_request_timeout_accepts_positive_float_env,
+        test_request_timeout_defaults_for_invalid_env,
         test_wit_requests_use_timeout,
         test_first_entity_value_handles_malformed_entities,
         test_get_forecast_handles_missing_entities,

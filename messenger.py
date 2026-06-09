@@ -17,8 +17,9 @@
 # 5. Subscribe your page to the Webhooks using verify_token and `https://<your_host>/webhook` as callback URL.
 # 6. Talk to your bot on Messenger!
 
-import os
 import hmac
+import math
+import os
 import requests
 from sys import argv
 from wit import Wit
@@ -32,9 +33,22 @@ FB_PAGE_TOKEN = os.environ.get('FB_PAGE_TOKEN')
 FB_VERIFY_TOKEN = os.environ.get('FB_VERIFY_TOKEN')
 # Weather API
 OPEN_WEATHER_TOKEN = os.environ.get('OPEN_WEATHER_TOKEN')
-REQUEST_TIMEOUT = float(os.environ.get('REQUEST_TIMEOUT', '5'))
 FB_MESSAGES_URL = 'https://graph.facebook.com/me/messages'
 OPEN_WEATHER_URL = 'https://api.openweathermap.org/data/2.5/weather'
+
+
+def positive_float_from_env(name, default):
+    try:
+        value = float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return float(default)
+
+    if value <= 0 or math.isnan(value) or math.isinf(value):
+        return float(default)
+    return value
+
+
+REQUEST_TIMEOUT = positive_float_from_env('REQUEST_TIMEOUT', 5.0)
 
 # Setup Bottle Server
 debug(True)

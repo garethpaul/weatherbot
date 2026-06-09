@@ -2,6 +2,10 @@
 
 ## 2026-06-09
 
+- Added safe `REQUEST_TIMEOUT` parsing for Messenger, Wit, and OpenWeather
+  requests so invalid, non-finite, or non-positive values fall back to five
+  seconds.
+- Added dependency-free contract coverage for request timeout parsing.
 - Validated OpenWeather response shape before reading conditions and returned a
   missing forecast state for malformed weather payloads.
 - Added dependency-free contract coverage for malformed weather results and

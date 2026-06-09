@@ -1,3 +1,4 @@
+import math
 import requests
 import os
 import uuid
@@ -5,10 +6,23 @@ import logging
 
 WIT_API_HOST = os.getenv('WIT_URL', 'https://api.wit.ai')
 WIT_API_VERSION = os.getenv('WIT_API_VERSION', '20160516')
-DEFAULT_REQUEST_TIMEOUT = float(os.getenv('REQUEST_TIMEOUT', '5'))
 DEFAULT_MAX_STEPS = 5
 INTERACTIVE_PROMPT = '> '
 LEARN_MORE = 'Learn more at https://wit.ai/docs/quickstart'
+
+
+def positive_float_from_env(name, default):
+    try:
+        value = float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return float(default)
+
+    if value <= 0 or math.isnan(value) or math.isinf(value):
+        return float(default)
+    return value
+
+
+DEFAULT_REQUEST_TIMEOUT = positive_float_from_env('REQUEST_TIMEOUT', 5.0)
 
 
 class WitError(Exception):
