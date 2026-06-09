@@ -2,6 +2,7 @@
 
 ## 2026-06-08
 
+- Tightened docs-plan verification to require recorded `make check` evidence.
 - Added a local `make verify` gate with dependency-free webhook and API client contract checks.
 - Validated Messenger webhook JSON before reading nested message fields.
 - Ignored unsupported Messenger delivery/read events without calling Wit actions.

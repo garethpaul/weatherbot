@@ -50,6 +50,8 @@ The setup commands above are derived from repository files. Legacy mobile, Pytho
 - `make verify` runs syntax checks and dependency-free webhook/API contract checks.
 - `make check` runs `make verify` with bytecode cleanup before and after.
 - `python3 scripts/check_weatherbot_contracts.py` runs just the webhook and outbound API contracts.
+- Completed maintenance plans live under `docs/plans` and are checked by
+  `make check`.
 - `python -m unittest test_messenger` runs the legacy test suite when Python 2 dependencies are installed.
 
 When the required SDK or runtime is unavailable, use static checks and source review first, then verify on a machine that has the matching platform toolchain.
@@ -74,6 +76,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
 
 - See `SECURITY.md` for vulnerability reporting and safe research guidance.
 - See `VISION.md` for project direction and contribution guardrails.
+- See `docs/plans/2026-06-08-weatherbot-webhook-api-hardening.md` for the
+  current webhook and API client hardening baseline.
 
 ## Contributing
 

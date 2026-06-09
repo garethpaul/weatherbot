@@ -209,7 +209,9 @@ def test_wit_requests_use_timeout():
 
 def test_completed_plan_is_in_docs_plans():
     assert_true(PLAN_PATH.is_file(), "weatherbot hardening plan must live under docs/plans")
-    assert_true("status: completed" in PLAN_PATH.read_text(), "weatherbot hardening plan must be completed")
+    plan_text = PLAN_PATH.read_text()
+    assert_true("status: completed" in plan_text.lower(), "weatherbot hardening plan must be completed")
+    assert_true("make check" in plan_text, "weatherbot hardening plan must document make check verification")
 
 
 def main():
