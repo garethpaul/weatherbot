@@ -19,6 +19,7 @@ Priority:
 - Make weather lookup and response flow easy to trace
 - Treat malformed Wit entities as missing user location
 - Treat malformed OpenWeather results as missing forecasts
+- Treat OpenWeather lookup exceptions as missing forecasts
 - Keep outbound request timeout configuration bounded and non-crashing
 - Keep Bottle debug mode disabled unless explicitly enabled locally
 - Avoid debug logging user messages, entities, or Wit response payloads

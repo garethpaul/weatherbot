@@ -2,6 +2,9 @@
 
 ## 2026-06-09
 
+- Treated OpenWeather lookup exceptions as missing forecasts instead of letting
+  them abort forecast action handling.
+- Added dependency-free contract coverage for weather lookup exception fallback.
 - Replaced Wit request/response debug logs that included params or JSON payloads
   with generic endpoint traces.
 - Added dependency-free contract coverage for Wit debug log privacy.

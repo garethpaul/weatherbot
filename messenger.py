@@ -227,7 +227,10 @@ def get_forecast(request):
     loc = first_entity_value(entities, 'location')
     if loc:
         # This is where we could use a weather service api to get the weather.
-        conditions = get_weather(loc)
+        try:
+            conditions = get_weather(loc)
+        except Exception:
+            conditions = None
         if conditions:
             context['forecast'] = conditions
             if context.get('missingForecast') is not None:

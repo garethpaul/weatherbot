@@ -22,6 +22,9 @@ MESSENGER_TEXT_PLAN_PATH = (
 WIT_LOG_PRIVACY_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-09-weatherbot-wit-log-privacy.md"
 )
+WEATHER_EXCEPTION_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-09-weatherbot-weather-exception-fallback.md"
+)
 
 
 class FakeBottle:
@@ -499,6 +502,28 @@ def test_get_forecast_handles_malformed_weather_results():
     assert_true("missingLocation" not in result, "known location must clear stale missingLocation")
 
 
+def test_get_forecast_handles_weather_lookup_exceptions():
+    messenger, _request, _response, _requests, _calls = load_messenger()
+    context = {"forecast": "Rain", "missingLocation": True}
+    original_get_weather = messenger.get_weather
+
+    def raise_lookup_error(_location):
+        raise RuntimeError("weather lookup failed")
+
+    messenger.get_weather = raise_lookup_error
+    try:
+        result = messenger.get_forecast({
+            "context": context,
+            "entities": {"location": [{"value": "Yountville"}]},
+        })
+    finally:
+        messenger.get_weather = original_get_weather
+
+    assert_equal(result.get("missingForecast"), True, "weather lookup exceptions set missingForecast")
+    assert_true("forecast" not in result, "weather lookup exceptions must clear stale forecast")
+    assert_true("missingLocation" not in result, "known location must clear stale missingLocation")
+
+
 def assert_completed_plan(path, label):
     assert_true(path.is_file(), "{0} plan must live under docs/plans".format(label))
     plan_text = path.read_text()
@@ -515,6 +540,7 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(DEBUG_MODE_PLAN_PATH, "weatherbot debug mode")
     assert_completed_plan(MESSENGER_TEXT_PLAN_PATH, "weatherbot Messenger text normalization")
     assert_completed_plan(WIT_LOG_PRIVACY_PLAN_PATH, "weatherbot Wit log privacy")
+    assert_completed_plan(WEATHER_EXCEPTION_PLAN_PATH, "weatherbot weather exception fallback")
 
 
 def main():
@@ -540,6 +566,7 @@ def main():
         test_first_entity_value_handles_malformed_entities,
         test_get_forecast_handles_missing_entities,
         test_get_forecast_handles_malformed_weather_results,
+        test_get_forecast_handles_weather_lookup_exceptions,
         test_completed_plans_are_in_docs_plans,
     ]
     for test in tests:
