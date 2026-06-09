@@ -21,13 +21,14 @@ Priority:
 - Treat malformed OpenWeather results as missing forecasts
 - Keep outbound request timeout configuration bounded and non-crashing
 - Keep Bottle debug mode disabled unless explicitly enabled locally
+- Avoid debug logging user messages, entities, or Wit response payloads
 - Treat Python and API versions as legacy until documented
 
 Next priorities:
 
 - Add README setup notes for each token and webhook endpoint
 - Add user-facing fallback text for weather lookup failures
-- Avoid debug logging of user messages by default
+- Document Python and dependency version constraints
 
 Contribution rules:
 

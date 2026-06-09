@@ -31,7 +31,7 @@ class WitError(Exception):
 
 def req(logger, access_token, meth, path, params, **kwargs):
     full_url = WIT_API_HOST + path
-    logger.debug('%s %s %s', meth, full_url, params)
+    logger.debug('%s %s request', meth, full_url)
     kwargs.setdefault('timeout', DEFAULT_REQUEST_TIMEOUT)
     rsp = requests.request(
         meth,
@@ -50,7 +50,7 @@ def req(logger, access_token, meth, path, params, **kwargs):
     if 'error' in json:
         raise WitError('Wit responded with an error: ' + json['error'])
 
-    logger.debug('%s %s %s', meth, full_url, json)
+    logger.debug('%s %s response received', meth, full_url)
     return json
 
 

@@ -2,6 +2,9 @@
 
 ## 2026-06-09
 
+- Replaced Wit request/response debug logs that included params or JSON payloads
+  with generic endpoint traces.
+- Added dependency-free contract coverage for Wit debug log privacy.
 - Disabled Bottle debug mode by default and made it opt-in with
   `WEATHERBOT_DEBUG`.
 - Added dependency-free contract coverage for debug-mode environment parsing.

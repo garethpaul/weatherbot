@@ -19,6 +19,9 @@ DEBUG_MODE_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-09-weatherbot-debug-mo
 MESSENGER_TEXT_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-09-weatherbot-messenger-text-normalization.md"
 )
+WIT_LOG_PRIVACY_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-09-weatherbot-wit-log-privacy.md"
+)
 
 
 class FakeBottle:
@@ -416,6 +419,26 @@ def test_wit_requests_use_timeout():
     assert_equal(kwargs.get("timeout"), 5, "wit request timeout")
 
 
+def test_wit_debug_logs_avoid_message_payloads():
+    source = (ROOT / "wit.py").read_text()
+    assert_true(
+        "logger.debug('%s %s %s', meth, full_url, params)" not in source,
+        "Wit request debug logs must not include request params",
+    )
+    assert_true(
+        "logger.debug('%s %s %s', meth, full_url, json)" not in source,
+        "Wit response debug logs must not include response JSON",
+    )
+    assert_true(
+        "logger.debug('%s %s request', meth, full_url)" in source,
+        "Wit request debug logging may keep method and endpoint only",
+    )
+    assert_true(
+        "logger.debug('%s %s response received', meth, full_url)" in source,
+        "Wit response debug logging may keep method and endpoint only",
+    )
+
+
 def test_first_entity_value_handles_malformed_entities():
     messenger, _request, _response, _requests, _calls = load_messenger()
 
@@ -491,6 +514,7 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(REQUEST_TIMEOUT_PLAN_PATH, "weatherbot request timeout")
     assert_completed_plan(DEBUG_MODE_PLAN_PATH, "weatherbot debug mode")
     assert_completed_plan(MESSENGER_TEXT_PLAN_PATH, "weatherbot Messenger text normalization")
+    assert_completed_plan(WIT_LOG_PRIVACY_PLAN_PATH, "weatherbot Wit log privacy")
 
 
 def main():
@@ -512,6 +536,7 @@ def main():
         test_bottle_debug_is_disabled_by_default,
         test_bottle_debug_requires_truthy_env_flag,
         test_wit_requests_use_timeout,
+        test_wit_debug_logs_avoid_message_payloads,
         test_first_entity_value_handles_malformed_entities,
         test_get_forecast_handles_missing_entities,
         test_get_forecast_handles_malformed_weather_results,
