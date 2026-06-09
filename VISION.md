@@ -17,12 +17,12 @@ Priority:
 - Keep Wit, Facebook, and weather tokens in environment variables
 - Make weather lookup and response flow easy to trace
 - Treat malformed Wit entities as missing user location
+- Treat malformed OpenWeather results as missing forecasts
 - Treat Python and API versions as legacy until documented
 
 Next priorities:
 
 - Add README setup notes for each token and webhook endpoint
-- Validate OpenWeather JSON response shape before reading conditions
 - Add user-facing fallback text for weather lookup failures
 - Avoid debug logging of user messages by default
 

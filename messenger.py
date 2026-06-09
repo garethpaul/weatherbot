@@ -152,7 +152,18 @@ def get_weather(text):
     resp = requests.get(OPEN_WEATHER_URL, params=qs, timeout=REQUEST_TIMEOUT)
     resp.raise_for_status()
     data = resp.json()
-    return str(data['weather'][0]['main'])
+    if not isinstance(data, dict):
+        return None
+    weather = data.get('weather')
+    if not isinstance(weather, list) or not weather:
+        return None
+    current = weather[0]
+    if not isinstance(current, dict):
+        return None
+    main = current.get('main')
+    if not main:
+        return None
+    return str(main)
 
 
 def first_entity_value(entities, entity):
@@ -194,13 +205,24 @@ def get_forecast(request):
     if loc:
         # This is where we could use a weather service api to get the weather.
         conditions = get_weather(loc)
-        context['forecast'] = conditions
-        if context.get('missingLocation') is not None:
-            del context['missingLocation']
+        if conditions:
+            context['forecast'] = conditions
+            if context.get('missingForecast') is not None:
+                del context['missingForecast']
+            if context.get('missingLocation') is not None:
+                del context['missingLocation']
+        else:
+            context['missingForecast'] = True
+            if context.get('forecast') is not None:
+                del context['forecast']
+            if context.get('missingLocation') is not None:
+                del context['missingLocation']
     else:
         context['missingLocation'] = True
         if context.get('forecast') is not None:
             del context['forecast']
+        if context.get('missingForecast') is not None:
+            del context['missingForecast']
     return context
 
 # Setup Actions

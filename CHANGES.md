@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-06-09
+
+- Validated OpenWeather response shape before reading conditions and returned a
+  missing forecast state for malformed weather payloads.
+- Added dependency-free contract coverage for malformed weather results and
+  stale forecast clearing.
+
 ## 2026-06-08
 
 - Treated missing or malformed Wit location entities as missing-location

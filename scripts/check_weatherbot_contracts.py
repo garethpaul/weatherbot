@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
 WEBHOOK_API_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-08-weatherbot-webhook-api-hardening.md"
 VERIFY_TOKEN_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-08-weatherbot-verify-token-fails-closed.md"
 WIT_ENTITY_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-08-weatherbot-wit-entity-shape.md"
+WEATHER_RESULT_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-09-weatherbot-weather-result-shape.md"
 
 
 class FakeBottle:
@@ -246,6 +247,28 @@ def test_weather_lookup_uses_https_params_and_timeout():
     assert_equal(kwargs.get("params", {}).get("appid"), "weather-token", "weather api token param")
 
 
+def test_weather_lookup_handles_malformed_results():
+    messenger, _request, _response, requests, _calls = load_messenger()
+
+    malformed_payloads = [
+        None,
+        {},
+        {"weather": []},
+        {"weather": ["Clear"]},
+        {"weather": [{}]},
+        {"weather": [{"main": ""}]},
+    ]
+
+    for payload in malformed_payloads:
+        def fake_get(url, params=None, **kwargs):
+            kwargs["params"] = params
+            requests.calls.append(("get", url, kwargs))
+            return FakeHTTPResponse(b"{}", payload)
+
+        requests.get = fake_get
+        assert_equal(messenger.get_weather("Yountville"), None, "malformed weather response")
+
+
 def test_wit_requests_use_timeout():
     _messenger, _request, _response, requests, _calls = load_messenger()
     wit = sys.modules["wit"]
@@ -300,6 +323,25 @@ def test_get_forecast_handles_missing_entities():
     assert_true("forecast" not in result, "missing entities must clear stale forecast")
 
 
+def test_get_forecast_handles_malformed_weather_results():
+    messenger, _request, _response, _requests, _calls = load_messenger()
+    context = {"forecast": "Rain", "missingLocation": True}
+    original_get_weather = messenger.get_weather
+    messenger.get_weather = lambda _location: None
+
+    try:
+        result = messenger.get_forecast({
+            "context": context,
+            "entities": {"location": [{"value": "Yountville"}]},
+        })
+    finally:
+        messenger.get_weather = original_get_weather
+
+    assert_equal(result.get("missingForecast"), True, "malformed weather result flag")
+    assert_true("forecast" not in result, "malformed weather results must clear stale forecast")
+    assert_true("missingLocation" not in result, "known location must clear stale missingLocation")
+
+
 def assert_completed_plan(path, label):
     assert_true(path.is_file(), "{0} plan must live under docs/plans".format(label))
     plan_text = path.read_text()
@@ -311,6 +353,7 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(WEBHOOK_API_PLAN_PATH, "weatherbot hardening")
     assert_completed_plan(VERIFY_TOKEN_PLAN_PATH, "weatherbot verify token")
     assert_completed_plan(WIT_ENTITY_PLAN_PATH, "weatherbot Wit entity shape")
+    assert_completed_plan(WEATHER_RESULT_PLAN_PATH, "weatherbot weather result shape")
 
 
 def main():
@@ -324,9 +367,11 @@ def main():
         test_messenger_post_routes_text_messages_to_wit,
         test_fb_message_uses_header_auth_and_timeout,
         test_weather_lookup_uses_https_params_and_timeout,
+        test_weather_lookup_handles_malformed_results,
         test_wit_requests_use_timeout,
         test_first_entity_value_handles_malformed_entities,
         test_get_forecast_handles_missing_entities,
+        test_get_forecast_handles_malformed_weather_results,
         test_completed_plans_are_in_docs_plans,
     ]
     for test in tests:
