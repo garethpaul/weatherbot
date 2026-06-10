@@ -4,6 +4,9 @@ ve
 *~
 __*
 .*
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
 *~
 #*
 \#*

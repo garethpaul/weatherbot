@@ -64,7 +64,7 @@ class TestMessenger(unittest.TestCase):
                                           'delivery': {'mids': ['mid-1']}}]}]}
         r = test_app.post_json('/webhook', data)
         self.assertEqual(r.status_int, 200)
-        self.assertEqual(r.body, 'ok')
+        self.assertEqual(r.text, 'ok')
 
     def test_facebook_invalid_payload(self):
         """
