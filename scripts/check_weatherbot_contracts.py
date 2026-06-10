@@ -31,6 +31,7 @@ WEATHER_EXCEPTION_PLAN_PATH = (
 MESSENGER_OBJECT_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-09-weatherbot-messenger-object-guard.md"
 )
+PYTHON3_CI_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-10-python3-runtime-and-ci.md"
 
 
 class FakeBottle:
@@ -611,6 +612,40 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(WIT_LOG_PRIVACY_PLAN_PATH, "weatherbot Wit log privacy")
     assert_completed_plan(WEATHER_EXCEPTION_PLAN_PATH, "weatherbot weather exception fallback")
     assert_completed_plan(MESSENGER_OBJECT_PLAN_PATH, "weatherbot Messenger object guard")
+    assert_completed_plan(PYTHON3_CI_PLAN_PATH, "weatherbot Python 3 and CI")
+
+
+def test_runtime_dependencies_and_ci_are_pinned():
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    for pattern in ["!.github/", "!.github/workflows/", "!.github/workflows/*.yml"]:
+        assert_true(pattern in gitignore, "workflow ignore exception: " + pattern)
+    assert_equal(
+        (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines(),
+        ["bottle==0.13.4", "requests==2.34.2"],
+        "runtime dependency pins",
+    )
+    assert_equal(
+        (ROOT / "test-requirements.txt").read_text(encoding="utf-8").splitlines(),
+        ["WebTest==3.0.7"],
+        "test dependency pins",
+    )
+    assert_equal(
+        (ROOT / "runtime.txt").read_text(encoding="utf-8").strip(),
+        "python-3.12.8",
+        "deployment runtime",
+    )
+    workflow = (ROOT / ".github" / "workflows" / "check.yml").read_text(encoding="utf-8")
+    for contract in [
+        "permissions:\n  contents: read",
+        "timeout-minutes: 10",
+        'python-version: ["3.10", "3.12"]',
+        "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10",
+        "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405",
+        "python -m pip install --requirement requirements.txt --requirement test-requirements.txt",
+        "run: make check",
+    ]:
+        assert_true(contract in workflow, "hosted verification contract: " + contract)
+    assert_true("@v" not in workflow, "hosted actions must use immutable commits")
 
 
 def main():
@@ -641,6 +676,7 @@ def main():
         test_get_forecast_handles_malformed_weather_results,
         test_get_forecast_handles_weather_lookup_exceptions,
         test_completed_plans_are_in_docs_plans,
+        test_runtime_dependencies_and_ci_are_pinned,
     ]
     for test in tests:
         test()

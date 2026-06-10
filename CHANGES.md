@@ -1,5 +1,17 @@
 # Changes
 
+## 2026-06-10
+
+- Migrated the declared runtime from Python 2.7.11 to Python 3.12.8.
+- Upgraded Bottle to 0.13.4 and Requests to 2.34.2, pinned WebTest 3.0.7 as a
+  test dependency, and removed unused Nose/Flake8 declarations.
+- Updated the route suite for Python 3 response text and made `make test` use
+  the configured Python interpreter.
+- Added immutable-pinned Python 3.10/3.12 CI that installs dependencies and
+  runs both 27 static contracts and 5 runtime route tests.
+- Added `.gitignore` exceptions so tracked GitHub workflow files remain
+  visible despite the legacy broad dotfile ignore rule.
+
 ## 2026-06-09
 
 - Rejected non-page Messenger webhook payloads with HTTP 400 before event

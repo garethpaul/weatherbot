@@ -29,14 +29,14 @@ Additional scan context:
 ### Prerequisites
 
 - Git
-- Python matching the era of the project
+- Python 3.10 or 3.12
 
 ### Setup
 
 ```bash
 git clone https://github.com/garethpaul/weatherbot.git
 cd weatherbot
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt -r test-requirements.txt
 ```
 
 The setup commands above are derived from repository files. Legacy mobile, Python, or JavaScript samples may require older SDKs or package versions than a modern workstation uses by default.
@@ -55,7 +55,10 @@ The setup commands above are derived from repository files. Legacy mobile, Pytho
 - `python3 scripts/check_weatherbot_contracts.py` runs just the webhook and outbound API contracts.
 - Completed maintenance plans live under `docs/plans` and are checked by
   `make check`.
-- `python -m unittest test_messenger` runs the legacy test suite when Python 2 dependencies are installed.
+- `python -m unittest test_messenger` runs the Bottle/WebTest route suite on
+  Python 3.10 or 3.12 after dependencies are installed.
+- GitHub Actions installs the pinned runtime/test dependencies and runs
+  `make check` on Python 3.10 and 3.12 with read-only permissions.
 
 When the required SDK or runtime is unavailable, use static checks and source review first, then verify on a machine that has the matching platform toolchain.
 
@@ -104,6 +107,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   rejecting non-page Messenger webhook payloads before Wit calls.
 - See `docs/plans/2026-06-09-weatherbot-wit-log-privacy.md` for Wit request
   and response debug log privacy coverage.
+- See `docs/plans/2026-06-10-python3-runtime-and-ci.md` for the Python 3
+  dependency, route-test, and hosted verification baseline.
 
 ## Contributing
 
