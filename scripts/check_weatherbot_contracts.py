@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Dependency-free route and API contract checks for weatherbot."""
 import importlib.util
+import hashlib
+import hmac
+import io
 import os
 import sys
 import types
@@ -46,6 +49,11 @@ class MutableRequest:
     def __init__(self):
         self.query = {}
         self.json = None
+        self.body = io.BytesIO(b"")
+        self.headers = {
+            "X-Hub-Signature-256": "sha256=" + hmac.new(
+                b"app-secret", b"", hashlib.sha256).hexdigest()
+        }
 
 
 class MutableResponse:
@@ -119,6 +127,7 @@ def load_messenger():
     spec.loader.exec_module(module)
     module.FB_PAGE_TOKEN = "page-token"
     module.FB_VERIFY_TOKEN = "verify-token"
+    module.FB_APP_SECRET = "app-secret"
     module.OPEN_WEATHER_TOKEN = "weather-token"
     module.REQUEST_TIMEOUT = 5
     calls = []
@@ -630,15 +639,17 @@ def test_runtime_dependencies_and_ci_are_pinned():
         "test dependency pins",
     )
     assert_equal(
-        (ROOT / "runtime.txt").read_text(encoding="utf-8").strip(),
-        "python-3.12.8",
-        "deployment runtime",
+        (ROOT / ".python-version").read_text(encoding="utf-8").strip(),
+        "3.14",
+        "deployment runtime line",
     )
+    assert_true(not (ROOT / "runtime.txt").exists(), "deprecated runtime.txt must remain removed")
     workflow = (ROOT / ".github" / "workflows" / "check.yml").read_text(encoding="utf-8")
     for contract in [
         "permissions:\n  contents: read",
         "timeout-minutes: 10",
-        'python-version: ["3.10", "3.12"]',
+        'python-version: ["3.10", "3.12", "3.14"]',
+        "workflow_dispatch:",
         "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10",
         "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405",
         "python -m pip install --requirement requirements.txt --requirement test-requirements.txt",
@@ -646,6 +657,8 @@ def test_runtime_dependencies_and_ci_are_pinned():
     ]:
         assert_true(contract in workflow, "hosted verification contract: " + contract)
     assert_true("@v" not in workflow, "hosted actions must use immutable commits")
+    messenger_source = (ROOT / "messenger.py").read_text(encoding="utf-8")
+    assert_true("verify_messenger_signature" in messenger_source, "Messenger POST signatures must remain required")
 
 
 def main():

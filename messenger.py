@@ -18,6 +18,7 @@
 # 6. Talk to your bot on Messenger!
 
 import hmac
+import hashlib
 import math
 import os
 import requests
@@ -31,6 +32,7 @@ WIT_TOKEN = os.environ.get('WIT_TOKEN')
 FB_PAGE_TOKEN = os.environ.get('FB_PAGE_TOKEN')
 # A user secret to verify webhook get request.
 FB_VERIFY_TOKEN = os.environ.get('FB_VERIFY_TOKEN')
+FB_APP_SECRET = os.environ.get('FB_APP_SECRET')
 # Weather API
 OPEN_WEATHER_TOKEN = os.environ.get('OPEN_WEATHER_TOKEN')
 FB_MESSAGES_URL = 'https://graph.facebook.com/me/messages'
@@ -105,6 +107,16 @@ def messenger_post():
     """
     Handler for webhook (currently for postback and messages)
     """
+    raw_body = request.body.read()
+    try:
+        request.body.seek(0)
+    except (AttributeError, IOError):
+        pass
+    if not verify_messenger_signature(
+            raw_body, request.headers.get('X-Hub-Signature-256'), FB_APP_SECRET):
+        response.status = 403
+        return 'Invalid signature'
+
     data = request.json
     if not isinstance(data, dict):
         response.status = 400
@@ -121,6 +133,16 @@ def messenger_post():
 
     # must send back response quickly
     return 'ok'
+
+
+def verify_messenger_signature(raw_body, signature, app_secret):
+    if not (raw_body is not None and signature and app_secret):
+        return False
+    if isinstance(raw_body, str):
+        raw_body = raw_body.encode('utf-8')
+    expected = 'sha256=' + hmac.new(
+        app_secret.encode('utf-8'), raw_body, hashlib.sha256).hexdigest()
+    return secure_compare(signature, expected)
 
 
 def messenger_text_messages(data):

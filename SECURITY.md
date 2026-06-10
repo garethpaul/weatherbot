@@ -35,6 +35,9 @@ Helpful reports include:
 
 ## Service and API Notes
 
+Messenger POST webhooks require a valid `X-Hub-Signature-256` calculated with
+`FB_APP_SECRET`. Keep that secret distinct from page and verification tokens.
+
 For web services, APIs, sockets, or scraping workflows, prioritize reports involving authentication bypass, authorization errors, injection, server-side request forgery, unsafe deserialization, credential leakage, data exposure, or denial-of-service conditions. Use test accounts and minimal proof-of-concept traffic only.
 
 Messenger webhook payloads should only invoke Wit actions when both the sender

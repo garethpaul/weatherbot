@@ -1,10 +1,13 @@
 import unittest
 import json
 import os
+import hashlib
+import hmac
 
 os.environ.setdefault('WIT_TOKEN', 'test-wit-token')
 os.environ.setdefault('FB_PAGE_TOKEN', 'test-page-token')
 os.environ.setdefault('FB_VERIFY_TOKEN', 'test-verify-token')
+os.environ.setdefault('FB_APP_SECRET', 'test-app-secret')
 os.environ.setdefault('OPEN_WEATHER_TOKEN', 'test-weather-token')
 
 import messenger
@@ -48,7 +51,7 @@ class TestMessenger(unittest.TestCase):
         fake_client = FakeClient()
         messenger.client = fake_client
         try:
-            r = test_app.post_json('/webhook', self.data)
+            r = self.post_signed_json(self.data)
         finally:
             messenger.client = original_client
 
@@ -62,7 +65,7 @@ class TestMessenger(unittest.TestCase):
         data = {'object': 'page',
                 'entry': [{'messaging': [{'sender': {'id': self.user_id},
                                           'delivery': {'mids': ['mid-1']}}]}]}
-        r = test_app.post_json('/webhook', data)
+        r = self.post_signed_json(data)
         self.assertEqual(r.status_int, 200)
         self.assertEqual(r.text, 'ok')
 
@@ -71,8 +74,25 @@ class TestMessenger(unittest.TestCase):
         Invalid JSON payloads should not raise server errors.
         """
         r = test_app.post('/webhook', '', content_type='text/plain',
+                          headers={'X-Hub-Signature-256': 'sha256=invalid'},
                           expect_errors=True)
-        self.assertEqual(r.status_int, 400)
+        self.assertEqual(r.status_int, 403)
+
+    def test_facebook_invalid_signature(self):
+        body = json.dumps(self.data).encode('utf-8')
+        r = test_app.post('/webhook', body, content_type='application/json',
+                          headers={'X-Hub-Signature-256': 'sha256=invalid'},
+                          expect_errors=True)
+        self.assertEqual(r.status_int, 403)
+
+    def post_signed_json(self, payload):
+        body = json.dumps(payload).encode('utf-8')
+        signature = 'sha256=' + hmac.new(
+            messenger.FB_APP_SECRET.encode('utf-8'),
+            body,
+            hashlib.sha256).hexdigest()
+        return test_app.post('/webhook', body, content_type='application/json',
+                             headers={'X-Hub-Signature-256': signature})
 
     def test_facebook_response(self):
         """
