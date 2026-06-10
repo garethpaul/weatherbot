@@ -48,9 +48,9 @@ The setup commands above are derived from repository files. Legacy mobile, Pytho
 ## Testing and Verification
 
 - `make verify` runs syntax checks and dependency-free webhook, Wit action,
-  Messenger object validation, Messenger sender/text normalization,
-  Messenger body size, OpenWeather shape, request timeout, outbound API,
-  weather fallback, and Wit log-privacy contract checks.
+  Wit entity normalization, Messenger object validation, Messenger sender/text
+  normalization, Messenger body size, OpenWeather shape, request timeout,
+  outbound API, weather fallback, and Wit log-privacy contract checks.
 - `make check` runs `make verify` with bytecode cleanup before and after.
 - `python3 scripts/check_weatherbot_contracts.py` runs just the webhook and outbound API contracts.
 - Completed maintenance plans live under `docs/plans` and are checked by
@@ -113,6 +113,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   dependency, route-test, and hosted verification baseline.
 - See `docs/plans/2026-06-10-messenger-webhook-size-limit.md` for the completed
   unauthenticated request-body limit.
+- See `docs/plans/2026-06-10-weatherbot-wit-entity-normalization.md` for
+  malformed nested entity rejection and location text normalization.
 
 ## Contributing
 

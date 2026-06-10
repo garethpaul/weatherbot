@@ -36,6 +36,9 @@ MESSENGER_OBJECT_PLAN_PATH = (
 )
 PYTHON3_CI_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-10-python3-runtime-and-ci.md"
 WEBHOOK_SIZE_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-10-messenger-webhook-size-limit.md"
+WIT_ENTITY_NORMALIZATION_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-10-weatherbot-wit-entity-normalization.md"
+)
 
 
 class FakeBottle:
@@ -532,6 +535,10 @@ def test_first_entity_value_handles_malformed_entities():
         {"location": ["Yountville"]},
         {"location": [{}]},
         {"location": [{"value": ""}]},
+        {"location": [{"value": {"confidence": 0.9}}]},
+        {"location": [{"value": {"value": []}}]},
+        {"location": [{"value": 42}]},
+        {"location": [{"value": "   "}]},
     ]
 
     for entities in malformed_cases:
@@ -542,15 +549,21 @@ def test_first_entity_value_handles_malformed_entities():
         )
 
     assert_equal(
-        messenger.first_entity_value({"location": [{"value": "Yountville"}]}, "location"),
+        messenger.first_entity_value({"location": [{"value": "  Yountville  "}]}, "location"),
         "Yountville",
-        "flat entity value",
+        "trimmed flat entity value",
     )
     assert_equal(
-        messenger.first_entity_value({"location": [{"value": {"value": "Yountville"}}]}, "location"),
-        "Yountville",
-        "nested entity value",
+        messenger.first_entity_value({"location": [{"value": {"value": "  Napa  "}}]}, "location"),
+        "Napa",
+        "trimmed nested entity value",
     )
+
+    source = (ROOT / "messenger.py").read_text(encoding="utf-8")
+    runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
+    assert_true("return clean_text_value(val)" in source, "Wit entity values must use text normalization")
+    assert_true("val['value']" not in source, "nested Wit entity values must not use unchecked indexing")
+    assert_true("test_wit_entity_values_are_normalized" in runtime_tests, "runtime tests must cover Wit entity normalization")
 
 
 def test_get_forecast_handles_missing_entities():
@@ -625,6 +638,7 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(MESSENGER_OBJECT_PLAN_PATH, "weatherbot Messenger object guard")
     assert_completed_plan(PYTHON3_CI_PLAN_PATH, "weatherbot Python 3 and CI")
     assert_completed_plan(WEBHOOK_SIZE_PLAN_PATH, "weatherbot Messenger webhook size limit")
+    assert_completed_plan(WIT_ENTITY_NORMALIZATION_PLAN_PATH, "weatherbot Wit entity normalization")
 
 
 def test_runtime_dependencies_and_ci_are_pinned():

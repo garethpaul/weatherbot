@@ -246,9 +246,9 @@ def first_entity_value(entities, entity):
         return None
 
     val = first_value.get('value')
-    if not val:
-        return None
-    return val['value'] if isinstance(val, dict) else val
+    if isinstance(val, dict):
+        val = val.get('value')
+    return clean_text_value(val)
 
 
 def send(request, response):

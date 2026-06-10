@@ -2,6 +2,8 @@
 
 ## 2026-06-10
 
+- Normalized flat and nested Wit location values, rejecting malformed or
+  non-text entity payloads instead of raising or querying OpenWeather with them.
 - Limited unauthenticated Messenger webhook bodies to 1 MiB and reject both
   oversized declared and streamed payloads with HTTP 413 before Wit dispatch.
 - Added dependency-free and Bottle/WebTest regressions, rooted Make execution,

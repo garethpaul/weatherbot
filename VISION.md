@@ -21,6 +21,7 @@ Priority:
 - Reject blank Messenger message text before Wit action handling
 - Make weather lookup and response flow easy to trace
 - Treat malformed Wit entities as missing user location
+- Normalize flat and nested Wit location values before weather lookup
 - Treat malformed OpenWeather results as missing forecasts
 - Treat OpenWeather lookup exceptions as missing forecasts
 - Keep outbound request timeout configuration bounded and non-crashing

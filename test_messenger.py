@@ -161,6 +161,26 @@ class TestMessenger(unittest.TestCase):
         self.assertEqual(calls[0][1]['params']['q'], self.location)
         self.assertEqual(calls[0][1]['timeout'], messenger.REQUEST_TIMEOUT)
 
+    def test_wit_entity_values_are_normalized(self):
+        malformed_values = [
+            None,
+            {'location': [{'value': {'confidence': 0.9}}]},
+            {'location': [{'value': {'value': []}}]},
+            {'location': [{'value': 42}]},
+            {'location': [{'value': '   '}]},
+        ]
+        for entities in malformed_values:
+            self.assertIsNone(messenger.first_entity_value(entities, 'location'))
+
+        self.assertEqual(
+            messenger.first_entity_value(
+                {'location': [{'value': '  Yountville  '}]}, 'location'),
+            'Yountville')
+        self.assertEqual(
+            messenger.first_entity_value(
+                {'location': [{'value': {'value': '  Napa  '}}]}, 'location'),
+            'Napa')
+
 
 if __name__ == '__main__':
     unittest.main()
