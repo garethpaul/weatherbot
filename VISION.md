@@ -14,6 +14,7 @@ The current focus is:
 Priority:
 
 - Preserve Messenger webhook verification and message handling
+- Bound unauthenticated Messenger request bodies before signature verification
 - Keep Wit, Facebook, and weather tokens in environment variables
 - Reject non-page Messenger webhook payloads before Wit action handling
 - Reject blank or non-text Messenger sender IDs before Wit action handling
@@ -56,6 +57,7 @@ API calls explicit.
 - Private conversation logs
 - Unverified webhook processing
 - Messenger webhook payloads that bypass page-object validation
+- Unbounded webhook request bodies
 - Live API tests as the only verification path
 
 This list is a roadmap guardrail, not a permanent rule.

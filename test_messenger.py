@@ -85,6 +85,19 @@ class TestMessenger(unittest.TestCase):
                           expect_errors=True)
         self.assertEqual(r.status_int, 403)
 
+    def test_facebook_rejects_oversized_payload(self):
+        data = {'object': 'page',
+                'padding': 'x' * messenger.MAX_MESSENGER_WEBHOOK_BYTES}
+        body = json.dumps(data).encode('utf-8')
+        signature = 'sha256=' + hmac.new(
+            messenger.FB_APP_SECRET.encode('utf-8'),
+            body,
+            hashlib.sha256).hexdigest()
+        r = test_app.post('/webhook', body, content_type='application/json',
+                          headers={'X-Hub-Signature-256': signature},
+                          expect_errors=True)
+        self.assertEqual(r.status_int, 413)
+
     def post_signed_json(self, payload):
         body = json.dumps(payload).encode('utf-8')
         signature = 'sha256=' + hmac.new(

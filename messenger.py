@@ -60,6 +60,7 @@ REQUEST_TIMEOUT = positive_float_from_env('REQUEST_TIMEOUT', 5.0)
 # Setup Bottle Server
 debug(truthy_env('WEATHERBOT_DEBUG'))
 app = Bottle()
+MAX_MESSENGER_WEBHOOK_BYTES = 1024 * 1024
 
 
 # Facebook Messenger GET Webhook
@@ -107,7 +108,15 @@ def messenger_post():
     """
     Handler for webhook (currently for postback and messages)
     """
-    raw_body = request.body.read()
+    content_length = getattr(request, 'content_length', None)
+    if content_length is not None and content_length > MAX_MESSENGER_WEBHOOK_BYTES:
+        response.status = 413
+        return 'Payload too large'
+
+    raw_body = request.body.read(MAX_MESSENGER_WEBHOOK_BYTES + 1)
+    if len(raw_body) > MAX_MESSENGER_WEBHOOK_BYTES:
+        response.status = 413
+        return 'Payload too large'
     try:
         request.body.seek(0)
     except (AttributeError, IOError):
