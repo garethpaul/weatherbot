@@ -21,4 +21,4 @@ build: lint
 verify: lint test build
 
 check: clean verify
-	$(MAKE) clean
+	$(MAKE) -f "$(ROOT)/Makefile" clean

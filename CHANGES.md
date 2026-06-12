@@ -2,6 +2,11 @@
 
 ## 2026-06-12
 
+- Returned Messenger verification challenges as UTF-8 plain text to resolve
+  the reflected-XSS CodeQL finding while preserving exact challenge echoing.
+- Required exact `application/json` Messenger POST media types with optional
+  parameter support and fail-closed HTTP 415 responses.
+- Added dependency-free and Bottle/WebTest content-type regressions.
 - Normalized Wit transport failures, provider errors, malformed JSON, and
   unexpected response shapes into stable `WitError` results without exposing
   provider details.
