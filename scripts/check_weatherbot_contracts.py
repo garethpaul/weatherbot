@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Dependency-free route and API contract checks for weatherbot."""
 import importlib.util
+import hashlib
+import hmac
+import io
 import os
 import sys
 import types
@@ -32,6 +35,13 @@ MESSENGER_OBJECT_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-09-weatherbot-messenger-object-guard.md"
 )
 PYTHON3_CI_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-10-python3-runtime-and-ci.md"
+WEBHOOK_SIZE_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-10-messenger-webhook-size-limit.md"
+WIT_ENTITY_NORMALIZATION_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-10-weatherbot-wit-entity-normalization.md"
+)
+WIT_FAILURE_ISOLATION_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-12-weatherbot-wit-failure-isolation.md"
+)
 
 
 class FakeBottle:
@@ -46,6 +56,12 @@ class MutableRequest:
     def __init__(self):
         self.query = {}
         self.json = None
+        self.body = io.BytesIO(b"")
+        self.content_length = 0
+        self.headers = {
+            "X-Hub-Signature-256": "sha256=" + hmac.new(
+                b"app-secret", b"", hashlib.sha256).hexdigest()
+        }
 
 
 class MutableResponse:
@@ -119,6 +135,7 @@ def load_messenger():
     spec.loader.exec_module(module)
     module.FB_PAGE_TOKEN = "page-token"
     module.FB_VERIFY_TOKEN = "verify-token"
+    module.FB_APP_SECRET = "app-secret"
     module.OPEN_WEATHER_TOKEN = "weather-token"
     module.REQUEST_TIMEOUT = 5
     calls = []
@@ -310,6 +327,62 @@ def test_messenger_post_routes_text_messages_to_wit():
 
     assert_equal(body, "ok", "message event response")
     assert_equal(calls, [("user-1", "weather in Yountville")], "Wit action call")
+
+
+def test_messenger_post_isolates_wit_failures_per_message():
+    messenger, request, response, _requests, _calls = load_messenger()
+    processed = []
+
+    def run_actions(session_id, message):
+        processed.append((session_id, message))
+        if message == "first":
+            raise messenger.WitError("Wit request failed.")
+
+    messenger.client = types.SimpleNamespace(run_actions=run_actions)
+    request.json = {
+        "object": "page",
+        "entry": [{
+            "messaging": [
+                {"sender": {"id": "user-1"}, "message": {"text": "first"}},
+                {"sender": {"id": "user-2"}, "message": {"text": "second"}},
+            ]
+        }],
+    }
+
+    body = messenger.messenger_post()
+
+    assert_equal(response.status, 200, "isolated Wit failure status")
+    assert_equal(body, "ok", "isolated Wit failure response")
+    assert_equal(
+        processed,
+        [("user-1", "first"), ("user-2", "second")],
+        "later messages must run after a Wit failure",
+    )
+
+
+def test_messenger_post_propagates_unexpected_action_errors():
+    messenger, request, _response, _requests, _calls = load_messenger()
+
+    def run_actions(session_id, message):
+        raise RuntimeError("programming error")
+
+    messenger.client = types.SimpleNamespace(run_actions=run_actions)
+    request.json = {
+        "object": "page",
+        "entry": [{
+            "messaging": [{
+                "sender": {"id": "user-1"},
+                "message": {"text": "weather"},
+            }]
+        }],
+    }
+
+    try:
+        messenger.messenger_post()
+    except RuntimeError as error:
+        assert_equal(str(error), "programming error", "unexpected action error")
+    else:
+        raise AssertionError("unexpected action errors must propagate")
 
 
 def test_messenger_post_ignores_blank_message_text():
@@ -511,6 +584,29 @@ def test_wit_debug_logs_avoid_message_payloads():
     )
 
 
+def test_wit_failures_use_stable_public_errors():
+    source = (ROOT / "wit.py").read_text(encoding="utf-8")
+    runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
+    for contract in [
+        "except requests.RequestException as error:",
+        "raise WitError('Wit request failed.') from error",
+        "except (TypeError, ValueError) as error:",
+        "raise WitError('Wit response was invalid.') from error",
+        "if not isinstance(data, dict):",
+        "raise WitError('Wit responded with an error.')",
+    ]:
+        assert_true(contract in source, "Wit failure contract: " + contract)
+    for test_name in [
+        "test_facebook_wit_failure_does_not_block_later_messages",
+        "test_facebook_unexpected_action_error_is_not_swallowed",
+        "test_wit_transport_failure_uses_stable_error_with_cause",
+        "test_wit_invalid_json_uses_stable_error_with_cause",
+        "test_wit_non_object_json_uses_stable_error",
+        "test_wit_provider_error_does_not_expose_response_details",
+    ]:
+        assert_true(test_name in runtime_tests, "Wit failure regression: " + test_name)
+
+
 def test_first_entity_value_handles_malformed_entities():
     messenger, _request, _response, _requests, _calls = load_messenger()
 
@@ -521,6 +617,10 @@ def test_first_entity_value_handles_malformed_entities():
         {"location": ["Yountville"]},
         {"location": [{}]},
         {"location": [{"value": ""}]},
+        {"location": [{"value": {"confidence": 0.9}}]},
+        {"location": [{"value": {"value": []}}]},
+        {"location": [{"value": 42}]},
+        {"location": [{"value": "   "}]},
     ]
 
     for entities in malformed_cases:
@@ -531,15 +631,21 @@ def test_first_entity_value_handles_malformed_entities():
         )
 
     assert_equal(
-        messenger.first_entity_value({"location": [{"value": "Yountville"}]}, "location"),
+        messenger.first_entity_value({"location": [{"value": "  Yountville  "}]}, "location"),
         "Yountville",
-        "flat entity value",
+        "trimmed flat entity value",
     )
     assert_equal(
-        messenger.first_entity_value({"location": [{"value": {"value": "Yountville"}}]}, "location"),
-        "Yountville",
-        "nested entity value",
+        messenger.first_entity_value({"location": [{"value": {"value": "  Napa  "}}]}, "location"),
+        "Napa",
+        "trimmed nested entity value",
     )
+
+    source = (ROOT / "messenger.py").read_text(encoding="utf-8")
+    runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
+    assert_true("return clean_text_value(val)" in source, "Wit entity values must use text normalization")
+    assert_true("val['value']" not in source, "nested Wit entity values must not use unchecked indexing")
+    assert_true("test_wit_entity_values_are_normalized" in runtime_tests, "runtime tests must cover Wit entity normalization")
 
 
 def test_get_forecast_handles_missing_entities():
@@ -613,6 +719,9 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(WEATHER_EXCEPTION_PLAN_PATH, "weatherbot weather exception fallback")
     assert_completed_plan(MESSENGER_OBJECT_PLAN_PATH, "weatherbot Messenger object guard")
     assert_completed_plan(PYTHON3_CI_PLAN_PATH, "weatherbot Python 3 and CI")
+    assert_completed_plan(WEBHOOK_SIZE_PLAN_PATH, "weatherbot Messenger webhook size limit")
+    assert_completed_plan(WIT_ENTITY_NORMALIZATION_PLAN_PATH, "weatherbot Wit entity normalization")
+    assert_completed_plan(WIT_FAILURE_ISOLATION_PLAN_PATH, "weatherbot Wit failure isolation")
 
 
 def test_runtime_dependencies_and_ci_are_pinned():
@@ -630,15 +739,20 @@ def test_runtime_dependencies_and_ci_are_pinned():
         "test dependency pins",
     )
     assert_equal(
-        (ROOT / "runtime.txt").read_text(encoding="utf-8").strip(),
-        "python-3.12.8",
-        "deployment runtime",
+        (ROOT / ".python-version").read_text(encoding="utf-8").strip(),
+        "3.14",
+        "deployment runtime line",
     )
+    assert_true(not (ROOT / "runtime.txt").exists(), "deprecated runtime.txt must remain removed")
     workflow = (ROOT / ".github" / "workflows" / "check.yml").read_text(encoding="utf-8")
     for contract in [
         "permissions:\n  contents: read",
+        "concurrency:",
+        "cancel-in-progress: true",
+        "runs-on: ubuntu-24.04",
         "timeout-minutes: 10",
-        'python-version: ["3.10", "3.12"]',
+        'python-version: ["3.10", "3.12", "3.14"]',
+        "workflow_dispatch:",
         "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10",
         "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405",
         "python -m pip install --requirement requirements.txt --requirement test-requirements.txt",
@@ -646,10 +760,48 @@ def test_runtime_dependencies_and_ci_are_pinned():
     ]:
         assert_true(contract in workflow, "hosted verification contract: " + contract)
     assert_true("@v" not in workflow, "hosted actions must use immutable commits")
+    assert_true("ubuntu-latest" not in workflow, "hosted verification must use a fixed Ubuntu runner")
+    assert_true("# v6.0.3" in workflow, "checkout pin annotation must identify the exact release")
+    assert_true("# v6.2.0" in workflow, "setup-python pin annotation must identify the exact release")
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    assert_true("ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))" in makefile, "Makefile must resolve the repository root")
+    assert_true('find "$(ROOT)"' in makefile, "Makefile cleanup must stay inside the repository")
+    assert_true('"$(ROOT)/scripts/check_weatherbot_contracts.py"' in makefile, "Makefile must use the rooted contract path")
+    messenger_source = (ROOT / "messenger.py").read_text(encoding="utf-8")
+    runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
+    assert_true("verify_messenger_signature" in messenger_source, "Messenger POST signatures must remain required")
+    assert_true("MAX_MESSENGER_WEBHOOK_BYTES = 1024 * 1024" in messenger_source, "Messenger webhook size limit must remain 1 MiB")
+    assert_true("request.body.read(MAX_MESSENGER_WEBHOOK_BYTES + 1)" in messenger_source, "Messenger request body reads must remain bounded")
+    assert_true("test_facebook_rejects_oversized_payload" in runtime_tests, "WebTest must cover oversized Messenger payloads")
+
+
+def test_messenger_post_rejects_oversized_declared_body():
+    messenger, request, response, _requests, calls = load_messenger()
+    request.content_length = messenger.MAX_MESSENGER_WEBHOOK_BYTES + 1
+
+    body = messenger.messenger_post()
+
+    assert_equal(response.status, 413, "oversized declared Messenger body status")
+    assert_equal(body, "Payload too large", "oversized declared Messenger body response")
+    assert_equal(calls, [], "oversized declared Messenger body Wit calls")
+
+
+def test_messenger_post_rejects_oversized_streamed_body():
+    messenger, request, response, _requests, calls = load_messenger()
+    request.content_length = None
+    request.body = io.BytesIO(b"x" * (messenger.MAX_MESSENGER_WEBHOOK_BYTES + 1))
+
+    body = messenger.messenger_post()
+
+    assert_equal(response.status, 413, "oversized streamed Messenger body status")
+    assert_equal(body, "Payload too large", "oversized streamed Messenger body response")
+    assert_equal(calls, [], "oversized streamed Messenger body Wit calls")
 
 
 def main():
     tests = [
+        test_messenger_post_rejects_oversized_declared_body,
+        test_messenger_post_rejects_oversized_streamed_body,
         test_messenger_post_rejects_invalid_json_shape,
         test_messenger_post_rejects_non_page_object,
         test_messenger_verification_rejects_missing_configured_token,
@@ -658,6 +810,8 @@ def main():
         test_messenger_verification_requires_challenge,
         test_messenger_post_ignores_non_message_events,
         test_messenger_post_routes_text_messages_to_wit,
+        test_messenger_post_isolates_wit_failures_per_message,
+        test_messenger_post_propagates_unexpected_action_errors,
         test_messenger_post_ignores_blank_message_text,
         test_messenger_post_trims_message_text,
         test_messenger_post_ignores_invalid_sender_ids,
@@ -671,6 +825,7 @@ def main():
         test_bottle_debug_requires_truthy_env_flag,
         test_wit_requests_use_timeout,
         test_wit_debug_logs_avoid_message_payloads,
+        test_wit_failures_use_stable_public_errors,
         test_first_entity_value_handles_malformed_entities,
         test_get_forecast_handles_missing_entities,
         test_get_forecast_handles_malformed_weather_results,

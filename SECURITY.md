@@ -35,11 +35,21 @@ Helpful reports include:
 
 ## Service and API Notes
 
+Messenger POST webhooks require a valid `X-Hub-Signature-256` calculated with
+`FB_APP_SECRET`. Keep that secret distinct from page and verification tokens.
+Webhook bodies larger than 1 MiB are rejected with HTTP 413 before signature
+verification, JSON parsing, or Wit action dispatch.
+
 For web services, APIs, sockets, or scraping workflows, prioritize reports involving authentication bypass, authorization errors, injection, server-side request forgery, unsafe deserialization, credential leakage, data exposure, or denial-of-service conditions. Use test accounts and minimal proof-of-concept traffic only.
 
 Messenger webhook payloads should only invoke Wit actions when both the sender
 ID and message text are textual and nonblank. Malformed sender IDs should be
 acknowledged without creating a Wit session.
+
+Expected Wit transport and response failures are isolated to the affected
+event so they do not force retries of an authenticated Messenger batch after
+earlier replies may have been sent. Public errors and logs must not include
+tokens, sender IDs, message text, request URLs, or provider response bodies.
 
 ## Dependency and Supply Chain Security
 

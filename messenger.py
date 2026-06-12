@@ -18,11 +18,12 @@
 # 6. Talk to your bot on Messenger!
 
 import hmac
+import hashlib
 import math
 import os
 import requests
 from sys import argv
-from wit import Wit
+from wit import Wit, WitError
 from bottle import Bottle, request, response, debug
 
 # Wit.ai parameters
@@ -31,6 +32,7 @@ WIT_TOKEN = os.environ.get('WIT_TOKEN')
 FB_PAGE_TOKEN = os.environ.get('FB_PAGE_TOKEN')
 # A user secret to verify webhook get request.
 FB_VERIFY_TOKEN = os.environ.get('FB_VERIFY_TOKEN')
+FB_APP_SECRET = os.environ.get('FB_APP_SECRET')
 # Weather API
 OPEN_WEATHER_TOKEN = os.environ.get('OPEN_WEATHER_TOKEN')
 FB_MESSAGES_URL = 'https://graph.facebook.com/me/messages'
@@ -58,6 +60,7 @@ REQUEST_TIMEOUT = positive_float_from_env('REQUEST_TIMEOUT', 5.0)
 # Setup Bottle Server
 debug(truthy_env('WEATHERBOT_DEBUG'))
 app = Bottle()
+MAX_MESSENGER_WEBHOOK_BYTES = 1024 * 1024
 
 
 # Facebook Messenger GET Webhook
@@ -105,6 +108,24 @@ def messenger_post():
     """
     Handler for webhook (currently for postback and messages)
     """
+    content_length = getattr(request, 'content_length', None)
+    if content_length is not None and content_length > MAX_MESSENGER_WEBHOOK_BYTES:
+        response.status = 413
+        return 'Payload too large'
+
+    raw_body = request.body.read(MAX_MESSENGER_WEBHOOK_BYTES + 1)
+    if len(raw_body) > MAX_MESSENGER_WEBHOOK_BYTES:
+        response.status = 413
+        return 'Payload too large'
+    try:
+        request.body.seek(0)
+    except (AttributeError, IOError):
+        pass
+    if not verify_messenger_signature(
+            raw_body, request.headers.get('X-Hub-Signature-256'), FB_APP_SECRET):
+        response.status = 403
+        return 'Invalid signature'
+
     data = request.json
     if not isinstance(data, dict):
         response.status = 400
@@ -117,10 +138,23 @@ def messenger_post():
 
     for fb_id, text in messenger_text_messages(data):
         # Let's forward the message to the Wit.ai Bot Engine
-        client.run_actions(session_id=fb_id, message=text)
+        try:
+            client.run_actions(session_id=fb_id, message=text)
+        except WitError:
+            continue
 
     # must send back response quickly
     return 'ok'
+
+
+def verify_messenger_signature(raw_body, signature, app_secret):
+    if not (raw_body is not None and signature and app_secret):
+        return False
+    if isinstance(raw_body, str):
+        raw_body = raw_body.encode('utf-8')
+    expected = 'sha256=' + hmac.new(
+        app_secret.encode('utf-8'), raw_body, hashlib.sha256).hexdigest()
+    return secure_compare(signature, expected)
 
 
 def messenger_text_messages(data):
@@ -215,9 +249,9 @@ def first_entity_value(entities, entity):
         return None
 
     val = first_value.get('value')
-    if not val:
-        return None
-    return val['value'] if isinstance(val, dict) else val
+    if isinstance(val, dict):
+        val = val.get('value')
+    return clean_text_value(val)
 
 
 def send(request, response):

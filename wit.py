@@ -33,25 +33,33 @@ def req(logger, access_token, meth, path, params, **kwargs):
     full_url = WIT_API_HOST + path
     logger.debug('%s %s request', meth, full_url)
     kwargs.setdefault('timeout', DEFAULT_REQUEST_TIMEOUT)
-    rsp = requests.request(
-        meth,
-        full_url,
-        headers={
-            'authorization': 'Bearer ' + access_token,
-            'accept': 'application/vnd.wit.' + WIT_API_VERSION + '+json'
-        },
-        params=params,
-        **kwargs
-    )
+    try:
+        rsp = requests.request(
+            meth,
+            full_url,
+            headers={
+                'authorization': 'Bearer ' + access_token,
+                'accept': 'application/vnd.wit.' + WIT_API_VERSION + '+json'
+            },
+            params=params,
+            **kwargs
+        )
+    except requests.RequestException as error:
+        raise WitError('Wit request failed.') from error
     if rsp.status_code > 200:
         raise WitError('Wit responded with status: ' + str(rsp.status_code) +
                        ' (' + rsp.reason + ')')
-    json = rsp.json()
-    if 'error' in json:
-        raise WitError('Wit responded with an error: ' + json['error'])
+    try:
+        data = rsp.json()
+    except (TypeError, ValueError) as error:
+        raise WitError('Wit response was invalid.') from error
+    if not isinstance(data, dict):
+        raise WitError('Wit response was invalid.')
+    if 'error' in data:
+        raise WitError('Wit responded with an error.')
 
     logger.debug('%s %s response received', meth, full_url)
-    return json
+    return data
 
 
 def validate_actions(logger, actions):

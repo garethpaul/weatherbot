@@ -1,14 +1,31 @@
 # Changes
 
+## 2026-06-12
+
+- Normalized Wit transport failures, provider errors, malformed JSON, and
+  unexpected response shapes into stable `WitError` results without exposing
+  provider details.
+- Isolated expected Wit failures per Messenger event so later messages in the
+  same authenticated batch still run and the valid webhook is acknowledged.
+- Added dependency-free contracts and Bottle/WebTest regressions proving batch
+  continuation, stable exception causes, and propagation of programming errors.
+
 ## 2026-06-10
 
-- Migrated the declared runtime from Python 2.7.11 to Python 3.12.8.
+- Normalized flat and nested Wit location values, rejecting malformed or
+  non-text entity payloads instead of raising or querying OpenWeather with them.
+- Limited unauthenticated Messenger webhook bodies to 1 MiB and reject both
+  oversized declared and streamed payloads with HTTP 413 before Wit dispatch.
+- Added dependency-free and Bottle/WebTest regressions, rooted Make execution,
+  and a fixed Ubuntu 24.04 CI runner.
+- Migrated the declared runtime from Python 2.7.11 to the Python 3.14 line.
 - Upgraded Bottle to 0.13.4 and Requests to 2.34.2, pinned WebTest 3.0.7 as a
   test dependency, and removed unused Nose/Flake8 declarations.
 - Updated the route suite for Python 3 response text and made `make test` use
   the configured Python interpreter.
-- Added immutable-pinned Python 3.10/3.12 CI that installs dependencies and
-  runs both 27 static contracts and 5 runtime route tests.
+- Added immutable-pinned Python 3.10/3.12/3.14 CI that installs dependencies
+  and runs the complete static and runtime route suites.
+- Required SHA-256 Messenger signatures before parsing webhook POST payloads.
 - Added `.gitignore` exceptions so tracked GitHub workflow files remain
   visible despite the legacy broad dotfile ignore rule.
 

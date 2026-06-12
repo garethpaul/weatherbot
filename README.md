@@ -29,7 +29,7 @@ Additional scan context:
 ### Prerequisites
 
 - Git
-- Python 3.10 or 3.12
+- Python 3.10 or newer; deployment tracks the Python 3.14 line
 
 ### Setup
 
@@ -48,17 +48,18 @@ The setup commands above are derived from repository files. Legacy mobile, Pytho
 ## Testing and Verification
 
 - `make verify` runs syntax checks and dependency-free webhook, Wit action,
-  Messenger object validation, Messenger sender/text normalization,
-  OpenWeather shape, request timeout, outbound API, weather fallback, and Wit
-  log-privacy contract checks.
+  Wit entity normalization, Messenger object validation, Messenger sender/text
+  normalization, Messenger body size, OpenWeather shape, request timeout,
+  outbound API, weather fallback, Wit failure-isolation, and Wit log-privacy
+  contract checks.
 - `make check` runs `make verify` with bytecode cleanup before and after.
 - `python3 scripts/check_weatherbot_contracts.py` runs just the webhook and outbound API contracts.
 - Completed maintenance plans live under `docs/plans` and are checked by
   `make check`.
-- `python -m unittest test_messenger` runs the Bottle/WebTest route suite on
-  Python 3.10 or 3.12 after dependencies are installed.
+- `python -m unittest test_messenger` runs the Bottle/WebTest route suite.
 - GitHub Actions installs the pinned runtime/test dependencies and runs
-  `make check` on Python 3.10 and 3.12 with read-only permissions.
+  `make check` on Python 3.10, 3.12, and 3.14 on Ubuntu 24.04 with read-only
+  permissions and cancellation for superseded runs.
 
 When the required SDK or runtime is unavailable, use static checks and source review first, then verify on a machine that has the matching platform toolchain.
 
@@ -67,6 +68,11 @@ When the required SDK or runtime is unavailable, use static checks and source re
 - `WIT_TOKEN` configures Wit.ai access.
 - `FB_PAGE_TOKEN` configures Facebook Messenger replies.
 - `FB_VERIFY_TOKEN` configures Messenger webhook verification.
+- `FB_APP_SECRET` validates `X-Hub-Signature-256` on Messenger POST payloads.
+- Messenger POST bodies are limited to 1 MiB before signature verification.
+- Expected Wit transport and response failures are isolated to the affected
+  Messenger event so later messages in an authenticated batch still run and
+  the valid webhook can be acknowledged.
 - `OPEN_WEATHER_TOKEN` configures OpenWeather lookup.
 - `REQUEST_TIMEOUT` optionally overrides outbound request timeout seconds;
   invalid, non-finite, or non-positive values fall back to `5.0`.
@@ -109,6 +115,10 @@ When the required SDK or runtime is unavailable, use static checks and source re
   and response debug log privacy coverage.
 - See `docs/plans/2026-06-10-python3-runtime-and-ci.md` for the Python 3
   dependency, route-test, and hosted verification baseline.
+- See `docs/plans/2026-06-10-messenger-webhook-size-limit.md` for the completed
+  unauthenticated request-body limit.
+- See `docs/plans/2026-06-10-weatherbot-wit-entity-normalization.md` for
+  malformed nested entity rejection and location text normalization.
 
 ## Contributing
 
