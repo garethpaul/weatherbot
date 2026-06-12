@@ -48,6 +48,9 @@ MESSENGER_CONTENT_TYPE_PLAN_PATH = (
 ROOTED_CLEANUP_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-12-root-independent-cleanup.md"
 )
+MESSENGER_CHALLENGE_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-12-messenger-challenge-plain-text.md"
+)
 
 
 class FakeBottle:
@@ -74,6 +77,7 @@ class MutableRequest:
 class MutableResponse:
     def __init__(self):
         self.status = 200
+        self.content_type = None
 
 
 class FakeHTTPResponse:
@@ -282,6 +286,7 @@ def test_messenger_verification_accepts_matching_token():
 
     assert_equal(body, "challenge-1", "matching verify token challenge")
     assert_equal(response.status, 200, "matching verify token status")
+    assert_equal(response.content_type, "text/plain; charset=UTF-8", "verification challenge content type")
 
 
 def test_messenger_verification_requires_challenge():
@@ -731,6 +736,7 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(WIT_FAILURE_ISOLATION_PLAN_PATH, "weatherbot Wit failure isolation")
     assert_completed_plan(MESSENGER_CONTENT_TYPE_PLAN_PATH, "weatherbot Messenger JSON content type")
     assert_completed_plan(ROOTED_CLEANUP_PLAN_PATH, "weatherbot root-independent cleanup")
+    assert_completed_plan(MESSENGER_CHALLENGE_PLAN_PATH, "weatherbot Messenger challenge plain text")
 
 
 def test_runtime_dependencies_and_ci_are_pinned():
@@ -785,6 +791,8 @@ def test_runtime_dependencies_and_ci_are_pinned():
     assert_true("test_facebook_rejects_oversized_payload" in runtime_tests, "WebTest must cover oversized Messenger payloads")
     assert_true("is_json_content_type" in messenger_source, "Messenger POST requests must require JSON media types")
     assert_true("test_facebook_rejects_json_prefix_spoof" in runtime_tests, "WebTest must reject JSON prefix spoofing")
+    assert_true("response.content_type = 'text/plain; charset=UTF-8'" in messenger_source, "Messenger challenge responses must be plain text")
+    assert_true("test_facebook_verification_challenge_is_plain_text" in runtime_tests, "WebTest must cover challenge response type")
 
 
 def test_messenger_post_rejects_oversized_declared_body():

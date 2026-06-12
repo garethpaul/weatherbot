@@ -121,6 +121,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   malformed nested entity rejection and location text normalization.
 - See `docs/plans/2026-06-12-messenger-json-content-type.md` for the exact JSON
   media-type requirement on signed Messenger webhook requests.
+- See `docs/plans/2026-06-12-messenger-challenge-plain-text.md` for the
+  reflected-XSS-safe verification challenge response contract.
 
 ## Contributing
 

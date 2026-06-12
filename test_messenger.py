@@ -61,6 +61,15 @@ class TestMessenger(unittest.TestCase):
         self.assertEqual(r.status_int, 200)
         self.assertEqual(fake_client.calls, [(self.user_id, 'hey')])
 
+    def test_facebook_verification_challenge_is_plain_text(self):
+        response = test_app.get(
+            '/webhook?hub.challenge=%3Cscript%3Ealert(1)%3C%2Fscript%3E'
+            '&hub.verify_token=test-verify-token')
+
+        self.assertEqual(response.status_int, 200)
+        self.assertEqual(response.text, '<script>alert(1)</script>')
+        self.assertEqual(response.content_type, 'text/plain')
+
     def test_facebook_delivery_event_is_ignored(self):
         """
         Delivery events should be acknowledged without calling Wit.
