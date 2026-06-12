@@ -50,7 +50,8 @@ The setup commands above are derived from repository files. Legacy mobile, Pytho
 - `make verify` runs syntax checks and dependency-free webhook, Wit action,
   Wit entity normalization, Messenger object validation, Messenger sender/text
   normalization, Messenger body size, OpenWeather shape, request timeout,
-  outbound API, weather fallback, and Wit log-privacy contract checks.
+  outbound API, weather fallback, Wit failure-isolation, and Wit log-privacy
+  contract checks.
 - `make check` runs `make verify` with bytecode cleanup before and after.
 - `python3 scripts/check_weatherbot_contracts.py` runs just the webhook and outbound API contracts.
 - Completed maintenance plans live under `docs/plans` and are checked by
@@ -69,6 +70,9 @@ When the required SDK or runtime is unavailable, use static checks and source re
 - `FB_VERIFY_TOKEN` configures Messenger webhook verification.
 - `FB_APP_SECRET` validates `X-Hub-Signature-256` on Messenger POST payloads.
 - Messenger POST bodies are limited to 1 MiB before signature verification.
+- Expected Wit transport and response failures are isolated to the affected
+  Messenger event so later messages in an authenticated batch still run and
+  the valid webhook can be acknowledged.
 - `OPEN_WEATHER_TOKEN` configures OpenWeather lookup.
 - `REQUEST_TIMEOUT` optionally overrides outbound request timeout seconds;
   invalid, non-finite, or non-positive values fall back to `5.0`.

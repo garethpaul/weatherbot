@@ -3,6 +3,8 @@ import json
 import os
 import hashlib
 import hmac
+import logging
+from unittest import mock
 
 os.environ.setdefault('WIT_TOKEN', 'test-wit-token')
 os.environ.setdefault('FB_PAGE_TOKEN', 'test-page-token')
@@ -11,6 +13,7 @@ os.environ.setdefault('FB_APP_SECRET', 'test-app-secret')
 os.environ.setdefault('OPEN_WEATHER_TOKEN', 'test-weather-token')
 
 import messenger
+import wit
 from webtest import TestApp
 test_app = TestApp(messenger.app)
 
@@ -69,6 +72,53 @@ class TestMessenger(unittest.TestCase):
         self.assertEqual(r.status_int, 200)
         self.assertEqual(r.text, 'ok')
 
+    def test_facebook_wit_failure_does_not_block_later_messages(self):
+        data = {'object': 'page',
+                'entry': [{'messaging': [
+                    {'sender': {'id': 'user-1'},
+                     'message': {'text': 'first'}},
+                    {'sender': {'id': 'user-2'},
+                     'message': {'text': 'second'}},
+                ]}]}
+
+        class FakeClient(object):
+            def __init__(self):
+                self.calls = []
+
+            def run_actions(self, session_id, message):
+                self.calls.append((session_id, message))
+                if message == 'first':
+                    raise messenger.WitError('Wit request failed.')
+
+        original_client = messenger.client
+        fake_client = FakeClient()
+        messenger.client = fake_client
+        try:
+            response = self.post_signed_json(data)
+        finally:
+            messenger.client = original_client
+
+        self.assertEqual(response.status_int, 200)
+        self.assertEqual(response.text, 'ok')
+        self.assertEqual(fake_client.calls, [
+            ('user-1', 'first'),
+            ('user-2', 'second'),
+        ])
+
+    def test_facebook_unexpected_action_error_is_not_swallowed(self):
+        class FakeClient(object):
+            def run_actions(self, session_id, message):
+                raise RuntimeError('programming error')
+
+        original_client = messenger.client
+        messenger.client = FakeClient()
+        try:
+            response = self.post_signed_json(self.data, expect_errors=True)
+        finally:
+            messenger.client = original_client
+
+        self.assertEqual(response.status_int, 500)
+
     def test_facebook_invalid_payload(self):
         """
         Invalid JSON payloads should not raise server errors.
@@ -98,14 +148,60 @@ class TestMessenger(unittest.TestCase):
                           expect_errors=True)
         self.assertEqual(r.status_int, 413)
 
-    def post_signed_json(self, payload):
+    def post_signed_json(self, payload, expect_errors=False):
         body = json.dumps(payload).encode('utf-8')
         signature = 'sha256=' + hmac.new(
             messenger.FB_APP_SECRET.encode('utf-8'),
             body,
             hashlib.sha256).hexdigest()
         return test_app.post('/webhook', body, content_type='application/json',
-                             headers={'X-Hub-Signature-256': signature})
+                             headers={'X-Hub-Signature-256': signature},
+                             expect_errors=expect_errors)
+
+    def test_wit_transport_failure_uses_stable_error_with_cause(self):
+        transport_error = wit.requests.RequestException(
+            'request exposed token and private URL')
+
+        with mock.patch.object(wit.requests, 'request', side_effect=transport_error):
+            with self.assertRaises(wit.WitError) as raised:
+                wit.req(logging.getLogger('test'), 'secret-token', 'GET', '/message', {})
+
+        self.assertEqual(str(raised.exception), 'Wit request failed.')
+        self.assertIs(raised.exception.__cause__, transport_error)
+
+    def test_wit_invalid_json_uses_stable_error_with_cause(self):
+        decode_error = ValueError('provider body contained private data')
+        fake_response = mock.Mock(status_code=200)
+        fake_response.json.side_effect = decode_error
+
+        with mock.patch.object(wit.requests, 'request', return_value=fake_response):
+            with self.assertRaises(wit.WitError) as raised:
+                wit.req(logging.getLogger('test'), 'secret-token', 'GET', '/message', {})
+
+        self.assertEqual(str(raised.exception), 'Wit response was invalid.')
+        self.assertIs(raised.exception.__cause__, decode_error)
+
+    def test_wit_non_object_json_uses_stable_error(self):
+        fake_response = mock.Mock(status_code=200)
+        fake_response.json.return_value = ['unexpected', 'response']
+
+        with mock.patch.object(wit.requests, 'request', return_value=fake_response):
+            with self.assertRaises(wit.WitError) as raised:
+                wit.req(logging.getLogger('test'), 'secret-token', 'GET', '/message', {})
+
+        self.assertEqual(str(raised.exception), 'Wit response was invalid.')
+
+    def test_wit_provider_error_does_not_expose_response_details(self):
+        fake_response = mock.Mock(status_code=200)
+        fake_response.json.return_value = {
+            'error': 'provider body exposed a token and private message',
+        }
+
+        with mock.patch.object(wit.requests, 'request', return_value=fake_response):
+            with self.assertRaises(wit.WitError) as raised:
+                wit.req(logging.getLogger('test'), 'secret-token', 'GET', '/message', {})
+
+        self.assertEqual(str(raised.exception), 'Wit responded with an error.')
 
     def test_facebook_response(self):
         """

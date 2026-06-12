@@ -46,6 +46,11 @@ Messenger webhook payloads should only invoke Wit actions when both the sender
 ID and message text are textual and nonblank. Malformed sender IDs should be
 acknowledged without creating a Wit session.
 
+Expected Wit transport and response failures are isolated to the affected
+event so they do not force retries of an authenticated Messenger batch after
+earlier replies may have been sent. Public errors and logs must not include
+tokens, sender IDs, message text, request URLs, or provider response bodies.
+
 ## Dependency and Supply Chain Security
 
 Dependency updates should come from trusted package managers and should keep lockfiles in sync when lockfiles exist. Do not commit credentials, private keys, tokens, generated secrets, or machine-local configuration. If a vulnerability depends on a compromised package, typosquatting risk, insecure transitive dependency, or unsafe build step, include the package name, affected version, and the path through which it is used.

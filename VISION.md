@@ -19,6 +19,8 @@ Priority:
 - Reject non-page Messenger webhook payloads before Wit action handling
 - Reject blank or non-text Messenger sender IDs before Wit action handling
 - Reject blank Messenger message text before Wit action handling
+- Isolate expected Wit failures per Messenger event to avoid batch retry
+  amplification after earlier replies
 - Make weather lookup and response flow easy to trace
 - Treat malformed Wit entities as missing user location
 - Normalize flat and nested Wit location values before weather lookup

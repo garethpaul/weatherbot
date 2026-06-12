@@ -1,5 +1,15 @@
 # Changes
 
+## 2026-06-12
+
+- Normalized Wit transport failures, provider errors, malformed JSON, and
+  unexpected response shapes into stable `WitError` results without exposing
+  provider details.
+- Isolated expected Wit failures per Messenger event so later messages in the
+  same authenticated batch still run and the valid webhook is acknowledged.
+- Added dependency-free contracts and Bottle/WebTest regressions proving batch
+  continuation, stable exception causes, and propagation of programming errors.
+
 ## 2026-06-10
 
 - Normalized flat and nested Wit location values, rejecting malformed or

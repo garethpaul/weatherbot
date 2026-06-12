@@ -23,7 +23,7 @@ import math
 import os
 import requests
 from sys import argv
-from wit import Wit
+from wit import Wit, WitError
 from bottle import Bottle, request, response, debug
 
 # Wit.ai parameters
@@ -138,7 +138,10 @@ def messenger_post():
 
     for fb_id, text in messenger_text_messages(data):
         # Let's forward the message to the Wit.ai Bot Engine
-        client.run_actions(session_id=fb_id, message=text)
+        try:
+            client.run_actions(session_id=fb_id, message=text)
+        except WitError:
+            continue
 
     # must send back response quickly
     return 'ok'

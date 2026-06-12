@@ -39,6 +39,9 @@ WEBHOOK_SIZE_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-10-messenger-webhook
 WIT_ENTITY_NORMALIZATION_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-10-weatherbot-wit-entity-normalization.md"
 )
+WIT_FAILURE_ISOLATION_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-12-weatherbot-wit-failure-isolation.md"
+)
 
 
 class FakeBottle:
@@ -326,6 +329,62 @@ def test_messenger_post_routes_text_messages_to_wit():
     assert_equal(calls, [("user-1", "weather in Yountville")], "Wit action call")
 
 
+def test_messenger_post_isolates_wit_failures_per_message():
+    messenger, request, response, _requests, _calls = load_messenger()
+    processed = []
+
+    def run_actions(session_id, message):
+        processed.append((session_id, message))
+        if message == "first":
+            raise messenger.WitError("Wit request failed.")
+
+    messenger.client = types.SimpleNamespace(run_actions=run_actions)
+    request.json = {
+        "object": "page",
+        "entry": [{
+            "messaging": [
+                {"sender": {"id": "user-1"}, "message": {"text": "first"}},
+                {"sender": {"id": "user-2"}, "message": {"text": "second"}},
+            ]
+        }],
+    }
+
+    body = messenger.messenger_post()
+
+    assert_equal(response.status, 200, "isolated Wit failure status")
+    assert_equal(body, "ok", "isolated Wit failure response")
+    assert_equal(
+        processed,
+        [("user-1", "first"), ("user-2", "second")],
+        "later messages must run after a Wit failure",
+    )
+
+
+def test_messenger_post_propagates_unexpected_action_errors():
+    messenger, request, _response, _requests, _calls = load_messenger()
+
+    def run_actions(session_id, message):
+        raise RuntimeError("programming error")
+
+    messenger.client = types.SimpleNamespace(run_actions=run_actions)
+    request.json = {
+        "object": "page",
+        "entry": [{
+            "messaging": [{
+                "sender": {"id": "user-1"},
+                "message": {"text": "weather"},
+            }]
+        }],
+    }
+
+    try:
+        messenger.messenger_post()
+    except RuntimeError as error:
+        assert_equal(str(error), "programming error", "unexpected action error")
+    else:
+        raise AssertionError("unexpected action errors must propagate")
+
+
 def test_messenger_post_ignores_blank_message_text():
     messenger, request, response, _requests, calls = load_messenger()
 
@@ -525,6 +584,29 @@ def test_wit_debug_logs_avoid_message_payloads():
     )
 
 
+def test_wit_failures_use_stable_public_errors():
+    source = (ROOT / "wit.py").read_text(encoding="utf-8")
+    runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
+    for contract in [
+        "except requests.RequestException as error:",
+        "raise WitError('Wit request failed.') from error",
+        "except (TypeError, ValueError) as error:",
+        "raise WitError('Wit response was invalid.') from error",
+        "if not isinstance(data, dict):",
+        "raise WitError('Wit responded with an error.')",
+    ]:
+        assert_true(contract in source, "Wit failure contract: " + contract)
+    for test_name in [
+        "test_facebook_wit_failure_does_not_block_later_messages",
+        "test_facebook_unexpected_action_error_is_not_swallowed",
+        "test_wit_transport_failure_uses_stable_error_with_cause",
+        "test_wit_invalid_json_uses_stable_error_with_cause",
+        "test_wit_non_object_json_uses_stable_error",
+        "test_wit_provider_error_does_not_expose_response_details",
+    ]:
+        assert_true(test_name in runtime_tests, "Wit failure regression: " + test_name)
+
+
 def test_first_entity_value_handles_malformed_entities():
     messenger, _request, _response, _requests, _calls = load_messenger()
 
@@ -639,6 +721,7 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(PYTHON3_CI_PLAN_PATH, "weatherbot Python 3 and CI")
     assert_completed_plan(WEBHOOK_SIZE_PLAN_PATH, "weatherbot Messenger webhook size limit")
     assert_completed_plan(WIT_ENTITY_NORMALIZATION_PLAN_PATH, "weatherbot Wit entity normalization")
+    assert_completed_plan(WIT_FAILURE_ISOLATION_PLAN_PATH, "weatherbot Wit failure isolation")
 
 
 def test_runtime_dependencies_and_ci_are_pinned():
@@ -727,6 +810,8 @@ def main():
         test_messenger_verification_requires_challenge,
         test_messenger_post_ignores_non_message_events,
         test_messenger_post_routes_text_messages_to_wit,
+        test_messenger_post_isolates_wit_failures_per_message,
+        test_messenger_post_propagates_unexpected_action_errors,
         test_messenger_post_ignores_blank_message_text,
         test_messenger_post_trims_message_text,
         test_messenger_post_ignores_invalid_sender_ids,
@@ -740,6 +825,7 @@ def main():
         test_bottle_debug_requires_truthy_env_flag,
         test_wit_requests_use_timeout,
         test_wit_debug_logs_avoid_message_payloads,
+        test_wit_failures_use_stable_public_errors,
         test_first_entity_value_handles_malformed_entities,
         test_get_forecast_handles_missing_entities,
         test_get_forecast_handles_malformed_weather_results,
