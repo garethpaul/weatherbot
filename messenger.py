@@ -113,6 +113,10 @@ def messenger_post():
         response.status = 413
         return 'Payload too large'
 
+    if not is_json_content_type(request.headers.get('Content-Type')):
+        response.status = 415
+        return 'Unsupported media type'
+
     raw_body = request.body.read(MAX_MESSENGER_WEBHOOK_BYTES + 1)
     if len(raw_body) > MAX_MESSENGER_WEBHOOK_BYTES:
         response.status = 413
@@ -145,6 +149,14 @@ def messenger_post():
 
     # must send back response quickly
     return 'ok'
+
+
+def is_json_content_type(value):
+    if not isinstance(value, str):
+        return False
+
+    media_type = value.split(';', 1)[0].strip().lower()
+    return media_type == 'application/json'
 
 
 def verify_messenger_signature(raw_body, signature, app_secret):

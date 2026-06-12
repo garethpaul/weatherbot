@@ -42,6 +42,12 @@ WIT_ENTITY_NORMALIZATION_PLAN_PATH = (
 WIT_FAILURE_ISOLATION_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-12-weatherbot-wit-failure-isolation.md"
 )
+MESSENGER_CONTENT_TYPE_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-12-messenger-json-content-type.md"
+)
+ROOTED_CLEANUP_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-12-root-independent-cleanup.md"
+)
 
 
 class FakeBottle:
@@ -59,6 +65,7 @@ class MutableRequest:
         self.body = io.BytesIO(b"")
         self.content_length = 0
         self.headers = {
+            "Content-Type": "application/json",
             "X-Hub-Signature-256": "sha256=" + hmac.new(
                 b"app-secret", b"", hashlib.sha256).hexdigest()
         }
@@ -722,6 +729,8 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(WEBHOOK_SIZE_PLAN_PATH, "weatherbot Messenger webhook size limit")
     assert_completed_plan(WIT_ENTITY_NORMALIZATION_PLAN_PATH, "weatherbot Wit entity normalization")
     assert_completed_plan(WIT_FAILURE_ISOLATION_PLAN_PATH, "weatherbot Wit failure isolation")
+    assert_completed_plan(MESSENGER_CONTENT_TYPE_PLAN_PATH, "weatherbot Messenger JSON content type")
+    assert_completed_plan(ROOTED_CLEANUP_PLAN_PATH, "weatherbot root-independent cleanup")
 
 
 def test_runtime_dependencies_and_ci_are_pinned():
@@ -767,12 +776,15 @@ def test_runtime_dependencies_and_ci_are_pinned():
     assert_true("ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))" in makefile, "Makefile must resolve the repository root")
     assert_true('find "$(ROOT)"' in makefile, "Makefile cleanup must stay inside the repository")
     assert_true('"$(ROOT)/scripts/check_weatherbot_contracts.py"' in makefile, "Makefile must use the rooted contract path")
+    assert_true('$(MAKE) -f "$(ROOT)/Makefile" clean' in makefile, "final cleanup must use the repository Makefile")
     messenger_source = (ROOT / "messenger.py").read_text(encoding="utf-8")
     runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
     assert_true("verify_messenger_signature" in messenger_source, "Messenger POST signatures must remain required")
     assert_true("MAX_MESSENGER_WEBHOOK_BYTES = 1024 * 1024" in messenger_source, "Messenger webhook size limit must remain 1 MiB")
     assert_true("request.body.read(MAX_MESSENGER_WEBHOOK_BYTES + 1)" in messenger_source, "Messenger request body reads must remain bounded")
     assert_true("test_facebook_rejects_oversized_payload" in runtime_tests, "WebTest must cover oversized Messenger payloads")
+    assert_true("is_json_content_type" in messenger_source, "Messenger POST requests must require JSON media types")
+    assert_true("test_facebook_rejects_json_prefix_spoof" in runtime_tests, "WebTest must reject JSON prefix spoofing")
 
 
 def test_messenger_post_rejects_oversized_declared_body():
@@ -798,10 +810,39 @@ def test_messenger_post_rejects_oversized_streamed_body():
     assert_equal(calls, [], "oversized streamed Messenger body Wit calls")
 
 
+def test_messenger_post_accepts_json_content_type_parameters():
+    messenger, request, response, _requests, calls = load_messenger()
+    request.headers["Content-Type"] = "Application/JSON; charset=UTF-8"
+    request.json = {"object": "page", "entry": []}
+
+    body = messenger.messenger_post()
+
+    assert_equal(response.status, 200, "parameterized JSON Messenger status")
+    assert_equal(body, "ok", "parameterized JSON Messenger response")
+    assert_equal(calls, [], "parameterized empty Messenger payload Wit calls")
+
+
+def test_messenger_post_rejects_non_json_content_types_before_authentication():
+    for content_type in (None, "text/plain", "application/jsonp", "application/ld+json"):
+        messenger, request, response, _requests, calls = load_messenger()
+        request.headers = {"X-Hub-Signature-256": "sha256=invalid"}
+        if content_type is not None:
+            request.headers["Content-Type"] = content_type
+        request.json = {"object": "page", "entry": []}
+
+        body = messenger.messenger_post()
+
+        assert_equal(response.status, 415, "non-JSON Messenger status {0!r}".format(content_type))
+        assert_equal(body, "Unsupported media type", "non-JSON Messenger response {0!r}".format(content_type))
+        assert_equal(calls, [], "non-JSON Messenger payload Wit calls")
+
+
 def main():
     tests = [
         test_messenger_post_rejects_oversized_declared_body,
         test_messenger_post_rejects_oversized_streamed_body,
+        test_messenger_post_accepts_json_content_type_parameters,
+        test_messenger_post_rejects_non_json_content_types_before_authentication,
         test_messenger_post_rejects_invalid_json_shape,
         test_messenger_post_rejects_non_page_object,
         test_messenger_verification_rejects_missing_configured_token,

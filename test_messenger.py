@@ -126,7 +126,25 @@ class TestMessenger(unittest.TestCase):
         r = test_app.post('/webhook', '', content_type='text/plain',
                           headers={'X-Hub-Signature-256': 'sha256=invalid'},
                           expect_errors=True)
-        self.assertEqual(r.status_int, 403)
+        self.assertEqual(r.status_int, 415)
+
+    def test_facebook_accepts_json_content_type_parameters(self):
+        response = self.post_signed_json(
+            self.data,
+            content_type='Application/JSON; charset=UTF-8')
+        self.assertEqual(response.status_int, 200)
+
+    def test_facebook_rejects_json_prefix_spoof(self):
+        body = json.dumps(self.data).encode('utf-8')
+        signature = 'sha256=' + hmac.new(
+            messenger.FB_APP_SECRET.encode('utf-8'),
+            body,
+            hashlib.sha256).hexdigest()
+        response = test_app.post(
+            '/webhook', body, content_type='application/jsonp',
+            headers={'X-Hub-Signature-256': signature},
+            expect_errors=True)
+        self.assertEqual(response.status_int, 415)
 
     def test_facebook_invalid_signature(self):
         body = json.dumps(self.data).encode('utf-8')
@@ -148,13 +166,14 @@ class TestMessenger(unittest.TestCase):
                           expect_errors=True)
         self.assertEqual(r.status_int, 413)
 
-    def post_signed_json(self, payload, expect_errors=False):
+    def post_signed_json(self, payload, expect_errors=False,
+                         content_type='application/json'):
         body = json.dumps(payload).encode('utf-8')
         signature = 'sha256=' + hmac.new(
             messenger.FB_APP_SECRET.encode('utf-8'),
             body,
             hashlib.sha256).hexdigest()
-        return test_app.post('/webhook', body, content_type='application/json',
+        return test_app.post('/webhook', body, content_type=content_type,
                              headers={'X-Hub-Signature-256': signature},
                              expect_errors=expect_errors)
 

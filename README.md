@@ -119,6 +119,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   unauthenticated request-body limit.
 - See `docs/plans/2026-06-10-weatherbot-wit-entity-normalization.md` for
   malformed nested entity rejection and location text normalization.
+- See `docs/plans/2026-06-12-messenger-json-content-type.md` for the exact JSON
+  media-type requirement on signed Messenger webhook requests.
 
 ## Contributing
 
