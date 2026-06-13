@@ -57,6 +57,9 @@ MESSENGER_ECHO_PLAN_PATH = (
 MESSENGER_REPLAY_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-13-messenger-message-replay-guard.md"
 )
+MESSENGER_BATCH_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-13-messenger-batch-processing-bound.md"
+)
 
 
 class FakeBottle:
@@ -352,6 +355,58 @@ def test_messenger_post_ignores_echoes_and_continues_batch():
     assert_equal(calls, [("user-1", "weather in Yountville")], "post-echo Wit call")
 
 
+def test_messenger_post_ignores_malformed_nested_events_and_continues_batch():
+    messenger, request, response, _requests, calls = load_messenger()
+    request.json = {
+        "object": "page",
+        "entry": [{
+            "messaging": [
+                {"sender": ["malformed"], "message": {"text": "ignored"}},
+                {"sender": {"id": "ignored"}, "message": ["malformed"]},
+                {"sender": {"id": "user-2"}, "message": {"text": "weather"}},
+            ]
+        }],
+    }
+    response.status = 200
+
+    body = messenger.messenger_post()
+
+    assert_equal(response.status, 200, "malformed nested batch status")
+    assert_equal(body, "ok", "malformed nested batch response")
+    assert_equal(calls, [("user-2", "weather")], "malformed nested batch Wit calls")
+
+
+def test_messenger_post_caps_valid_message_batch():
+    messenger, request, response, _requests, calls = load_messenger()
+    request.json = {
+        "object": "page",
+        "entry": [{
+            "messaging": [
+                {
+                    "sender": {"id": "user-{0}".format(index)},
+                    "message": {
+                        "mid": "batch-{0}".format(index),
+                        "text": "weather-{0}".format(index),
+                    },
+                }
+                for index in range(messenger.MAX_MESSENGER_MESSAGES_PER_WEBHOOK + 1)
+            ]
+        }],
+    }
+    response.status = 200
+
+    body = messenger.messenger_post()
+
+    assert_equal(response.status, 200, "capped Messenger batch status")
+    assert_equal(body, "ok", "capped Messenger batch response")
+    assert_equal(
+        len(calls),
+        messenger.MAX_MESSENGER_MESSAGES_PER_WEBHOOK,
+        "capped Messenger batch Wit call count",
+    )
+    assert_equal(calls[-1], ("user-19", "weather-19"), "capped Messenger final call")
+
+
 def test_messenger_post_requires_boolean_true_echo_flag():
     messenger, request, response, _requests, calls = load_messenger()
     request.json = {
@@ -523,6 +578,21 @@ def test_messenger_replay_source_contracts():
         claim_position < action_position < release_position,
         "claim, Wit action, and failure release must stay ordered",
     )
+
+
+def test_messenger_batch_source_contracts():
+    source = (ROOT / "messenger.py").read_text(encoding="utf-8")
+    runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
+    for contract in (
+            "MAX_MESSENGER_MESSAGES_PER_WEBHOOK = 20",
+            "if not isinstance(sender, dict) or not isinstance(message, dict):",
+            "if len(messages) >= MAX_MESSENGER_MESSAGES_PER_WEBHOOK:",
+            "return messages"):
+        assert_true(contract in source, "missing Messenger batch contract {0}".format(contract))
+    for test_name in (
+            "test_facebook_malformed_nested_events_do_not_hide_later_messages",
+            "test_facebook_caps_valid_message_batch"):
+        assert_true(test_name in runtime_tests, "missing Messenger batch runtime test {0}".format(test_name))
 
 
 def test_messenger_post_isolates_wit_failures_per_message():
@@ -923,6 +993,7 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(MESSENGER_CHALLENGE_PLAN_PATH, "weatherbot Messenger challenge plain text")
     assert_completed_plan(MESSENGER_ECHO_PLAN_PATH, "weatherbot Messenger echo guard")
     assert_completed_plan(MESSENGER_REPLAY_PLAN_PATH, "weatherbot Messenger replay guard")
+    assert_completed_plan(MESSENGER_BATCH_PLAN_PATH, "weatherbot Messenger batch processing bound")
 
 
 def test_runtime_dependencies_and_ci_are_pinned():
@@ -1045,6 +1116,8 @@ def main():
         test_messenger_verification_requires_challenge,
         test_messenger_post_ignores_non_message_events,
         test_messenger_post_ignores_echoes_and_continues_batch,
+        test_messenger_post_ignores_malformed_nested_events_and_continues_batch,
+        test_messenger_post_caps_valid_message_batch,
         test_messenger_post_requires_boolean_true_echo_flag,
         test_messenger_post_routes_text_messages_to_wit,
         test_messenger_post_suppresses_replayed_message_ids,
@@ -1054,6 +1127,7 @@ def main():
         test_messenger_post_preserves_missing_and_malformed_ids,
         test_recent_message_ids_evicts_oldest_claim_at_bound,
         test_messenger_replay_source_contracts,
+        test_messenger_batch_source_contracts,
         test_messenger_post_isolates_wit_failures_per_message,
         test_messenger_post_propagates_unexpected_action_errors,
         test_messenger_post_ignores_blank_message_text,

@@ -20,6 +20,7 @@ Priority:
 - Reject blank or non-text Messenger sender IDs before Wit action handling
 - Reject blank Messenger message text before Wit action handling
 - Suppress retried Messenger message IDs before repeating Wit actions
+- Process Messenger message batches in order with a fixed per-webhook cap
 - Isolate expected Wit failures per Messenger event to avoid batch retry
   amplification after earlier replies
 - Make weather lookup and response flow easy to trace

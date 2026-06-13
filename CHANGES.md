@@ -2,6 +2,10 @@
 
 ## 2026-06-13
 
+- Capped each signed Messenger webhook at 20 valid Wit action messages while
+  preserving payload order and per-message replay handling.
+- Ignored malformed nested sender and message values without hiding later
+  valid events in the same batch.
 - Added a bounded, thread-safe recent Messenger message-ID cache to suppress
   duplicate Wit actions from retried webhook deliveries.
 - Released per-message claims after handled Wit failures and unexpected action
