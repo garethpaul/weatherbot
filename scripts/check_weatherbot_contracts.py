@@ -54,6 +54,9 @@ MESSENGER_CHALLENGE_PLAN_PATH = (
 MESSENGER_ECHO_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-13-messenger-echo-guard.md"
 )
+MESSENGER_REPLAY_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-13-messenger-message-replay-guard.md"
+)
 
 
 class FakeBottle:
@@ -386,6 +389,140 @@ def test_messenger_post_routes_text_messages_to_wit():
 
     assert_equal(body, "ok", "message event response")
     assert_equal(calls, [("user-1", "weather in Yountville")], "Wit action call")
+
+
+def messenger_payload(message_id="mid-1", text="weather", sender="user-1"):
+    message = {"text": text}
+    if message_id is not None:
+        message["mid"] = message_id
+    return {
+        "object": "page",
+        "entry": [{"messaging": [{"sender": {"id": sender}, "message": message}]}],
+    }
+
+
+def test_messenger_post_suppresses_replayed_message_ids():
+    messenger, request, _response, _requests, calls = load_messenger()
+    request.json = messenger_payload("mid-replayed")
+
+    assert_equal(messenger.messenger_post(), "ok", "first Messenger delivery")
+    assert_equal(messenger.messenger_post(), "ok", "replayed Messenger delivery")
+
+    assert_equal(calls, [("user-1", "weather")], "replayed message ID Wit calls")
+
+
+def test_messenger_post_duplicate_batch_item_does_not_block_later_message():
+    messenger, request, _response, _requests, calls = load_messenger()
+    request.json = {
+        "object": "page",
+        "entry": [{"messaging": [
+            {"sender": {"id": "user-1"}, "message": {"mid": "mid-1", "text": "first"}},
+            {"sender": {"id": "user-1"}, "message": {"mid": "mid-1", "text": "first"}},
+            {"sender": {"id": "user-2"}, "message": {"mid": "mid-2", "text": "second"}},
+        ]}],
+    }
+
+    assert_equal(messenger.messenger_post(), "ok", "duplicate batch response")
+    assert_equal(
+        calls,
+        [("user-1", "first"), ("user-2", "second")],
+        "duplicate batch Wit calls",
+    )
+
+
+def test_messenger_post_releases_claim_after_wit_failure():
+    messenger, request, _response, _requests, _calls = load_messenger()
+    processed = []
+
+    def run_actions(session_id, message):
+        processed.append((session_id, message))
+        if len(processed) == 1:
+            raise messenger.WitError("Wit request failed.")
+
+    messenger.client = types.SimpleNamespace(run_actions=run_actions)
+    request.json = messenger_payload("mid-retry")
+
+    assert_equal(messenger.messenger_post(), "ok", "failed Messenger delivery")
+    assert_equal(messenger.messenger_post(), "ok", "retried Messenger delivery")
+    assert_equal(
+        processed,
+        [("user-1", "weather"), ("user-1", "weather")],
+        "failed Wit claim release",
+    )
+
+
+def test_messenger_post_releases_claim_after_unexpected_failure():
+    messenger, request, _response, _requests, _calls = load_messenger()
+    processed = []
+
+    def run_actions(session_id, message):
+        processed.append((session_id, message))
+        if len(processed) == 1:
+            raise RuntimeError("programming error")
+
+    messenger.client = types.SimpleNamespace(run_actions=run_actions)
+    request.json = messenger_payload("mid-retry")
+
+    try:
+        messenger.messenger_post()
+    except RuntimeError as error:
+        assert_equal(str(error), "programming error", "unexpected action error")
+    else:
+        raise AssertionError("unexpected action errors must propagate")
+
+    assert_equal(messenger.messenger_post(), "ok", "retry after unexpected failure")
+    assert_equal(
+        processed,
+        [("user-1", "weather"), ("user-1", "weather")],
+        "unexpected failure claim release",
+    )
+
+
+def test_messenger_post_preserves_missing_and_malformed_ids():
+    for message_id in (None, {"not": "text"}):
+        messenger, request, _response, _requests, calls = load_messenger()
+        request.json = messenger_payload(message_id)
+
+        messenger.messenger_post()
+        messenger.messenger_post()
+
+        assert_equal(
+            calls,
+            [("user-1", "weather"), ("user-1", "weather")],
+            "message ID compatibility {0!r}".format(message_id),
+        )
+
+
+def test_recent_message_ids_evicts_oldest_claim_at_bound():
+    messenger, _request, _response, _requests, _calls = load_messenger()
+    recent = messenger.RecentMessageIds(2)
+
+    assert_true(recent.claim("mid-1"), "first replay claim")
+    assert_true(recent.claim("mid-2"), "second replay claim")
+    assert_true(recent.claim("mid-3"), "third replay claim")
+    assert_true(not recent.claim("mid-3"), "newest claim must remain protected")
+    assert_true(recent.claim("mid-1"), "oldest claim must be evicted")
+
+
+def test_messenger_replay_source_contracts():
+    source = (ROOT / "messenger.py").read_text(encoding="utf-8")
+    for contract in (
+            "MAX_RECENT_MESSENGER_MESSAGE_IDS = 1024",
+            "class RecentMessageIds(object):",
+            "self._lock = threading.Lock()",
+            "self._ids.popitem(last=False)",
+            "message_id = clean_text_value(message.get('mid'))",
+            "recent_messenger_message_ids.claim(message_id)",
+            "recent_messenger_message_ids.release(message_id)"):
+        assert_true(contract in source, "missing Messenger replay contract {0}".format(contract))
+
+    claim_position = source.index("recent_messenger_message_ids.claim(message_id)")
+    action_position = source.index("client.run_actions(session_id=fb_id, message=text)")
+    release_position = source.index("recent_messenger_message_ids.release(message_id)")
+    assert_true(
+        claim_position < action_position < release_position,
+        "claim, Wit action, and failure release must stay ordered",
+    )
 
 
 def test_messenger_post_isolates_wit_failures_per_message():
@@ -785,6 +922,7 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(ROOTED_CLEANUP_PLAN_PATH, "weatherbot root-independent cleanup")
     assert_completed_plan(MESSENGER_CHALLENGE_PLAN_PATH, "weatherbot Messenger challenge plain text")
     assert_completed_plan(MESSENGER_ECHO_PLAN_PATH, "weatherbot Messenger echo guard")
+    assert_completed_plan(MESSENGER_REPLAY_PLAN_PATH, "weatherbot Messenger replay guard")
 
 
 def test_runtime_dependencies_and_ci_are_pinned():
@@ -909,6 +1047,13 @@ def main():
         test_messenger_post_ignores_echoes_and_continues_batch,
         test_messenger_post_requires_boolean_true_echo_flag,
         test_messenger_post_routes_text_messages_to_wit,
+        test_messenger_post_suppresses_replayed_message_ids,
+        test_messenger_post_duplicate_batch_item_does_not_block_later_message,
+        test_messenger_post_releases_claim_after_wit_failure,
+        test_messenger_post_releases_claim_after_unexpected_failure,
+        test_messenger_post_preserves_missing_and_malformed_ids,
+        test_recent_message_ids_evicts_oldest_claim_at_bound,
+        test_messenger_replay_source_contracts,
         test_messenger_post_isolates_wit_failures_per_message,
         test_messenger_post_propagates_unexpected_action_errors,
         test_messenger_post_ignores_blank_message_text,

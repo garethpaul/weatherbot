@@ -1,6 +1,6 @@
 # Messenger Message Replay Guard
 
-Status: In Progress
+Status: Completed
 
 ## Problem
 
@@ -22,12 +22,15 @@ actions and outbound replies.
 
 ## Verification
 
-- Run focused suppression, batch, no-ID, malformed-ID, bounded-eviction, and
-  failure-release tests.
-- Run the full `make check` gate locally and from an external working
-  directory.
-- Reject hostile mutations for parsing, claim ordering, suppression, bounded
-  storage, failure release, locking, and stale plan status.
-- Run Python compilation, `git diff --check`, artifact review, and focused
-  secret review.
-- Do not perform live Messenger, Wit.ai, or OpenWeather requests.
+- Seven focused runtime tests and seven focused dependency-free contracts
+  passed for suppression, batch continuation, no-ID and malformed-ID
+  compatibility, bounded eviction, both failure-release branches, and source
+  ordering.
+- The full `make check` gate passed locally and from an external working
+  directory with 43 dependency-free contracts and 25 runtime tests.
+- Ten hostile mutations were rejected for ID parsing and tuple propagation,
+  claim ordering, duplicate suppression, bounded storage, locking, both
+  failure-release branches, and stale plan status.
+- Python compilation, `git diff --check`, artifact review, and focused secret
+  review passed.
+- No live Messenger, Wit.ai, or OpenWeather request was performed.

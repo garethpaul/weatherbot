@@ -44,6 +44,10 @@ parameters and case differences are accepted, while other types return 415
 before signature verification or JSON parsing.
 Messenger GET verification challenges are returned as UTF-8 plain text so
 untrusted challenge values cannot be interpreted as HTML.
+Recent non-empty Messenger message IDs are claimed before Wit actions in a
+bounded process-local cache. Duplicate deliveries are acknowledged without
+repeating actions, while failed actions release their claims for provider
+retries. Claims do not span workers or process restarts.
 
 For web services, APIs, sockets, or scraping workflows, prioritize reports involving authentication bypass, authorization errors, injection, server-side request forgery, unsafe deserialization, credential leakage, data exposure, or denial-of-service conditions. Use test accounts and minimal proof-of-concept traffic only.
 

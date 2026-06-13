@@ -49,9 +49,9 @@ The setup commands above are derived from repository files. Legacy mobile, Pytho
 
 - `make verify` runs syntax checks and dependency-free webhook, Wit action,
   Wit entity normalization, Messenger object validation, Messenger sender/text
-  normalization, Messenger body size, OpenWeather shape, request timeout,
-  outbound API, weather fallback, Wit failure-isolation, and Wit log-privacy
-  contract checks.
+  normalization, Messenger replay suppression and body size, OpenWeather shape,
+  request timeout, outbound API, weather fallback, Wit failure-isolation, and
+  Wit log-privacy contract checks.
 - `make check` runs `make verify` with bytecode cleanup before and after.
 - `python3 scripts/check_weatherbot_contracts.py` runs just the webhook and outbound API contracts.
 - Completed maintenance plans live under `docs/plans` and are checked by
@@ -73,6 +73,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
 - Expected Wit transport and response failures are isolated to the affected
   Messenger event so later messages in an authenticated batch still run and
   the valid webhook can be acknowledged.
+- Recent non-empty Messenger message IDs are claimed in a bounded process-local
+  cache so retries do not repeat Wit actions; failed actions release claims.
 - `OPEN_WEATHER_TOKEN` configures OpenWeather lookup.
 - `REQUEST_TIMEOUT` optionally overrides outbound request timeout seconds;
   invalid, non-finite, or non-positive values fall back to `5.0`.
@@ -125,6 +127,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   reflected-XSS-safe verification challenge response contract.
 - See `docs/plans/2026-06-13-messenger-echo-guard.md` for ignoring page echo
   events without hiding later user messages in the same webhook batch.
+- See `docs/plans/2026-06-13-messenger-message-replay-guard.md` for bounded
+  process-local retry suppression and per-message failure recovery.
 
 ## Contributing
 

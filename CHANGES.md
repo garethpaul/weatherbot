@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-06-13
+
+- Added a bounded, thread-safe recent Messenger message-ID cache to suppress
+  duplicate Wit actions from retried webhook deliveries.
+- Released per-message claims after handled Wit failures and unexpected action
+  exceptions while preserving later-message batch processing.
+
 ## 2026-06-12
 
 - Returned Messenger verification challenges as UTF-8 plain text to resolve
