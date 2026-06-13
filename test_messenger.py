@@ -81,6 +81,35 @@ class TestMessenger(unittest.TestCase):
         self.assertEqual(r.status_int, 200)
         self.assertEqual(r.text, 'ok')
 
+    def test_facebook_echo_is_ignored_before_later_user_message(self):
+        data = {'object': 'page',
+                'entry': [{'messaging': [
+                    {'sender': {'id': 'page-1'},
+                     'message': {'text': 'page reply', 'is_echo': True}},
+                    {'sender': {'id': 'user-2'},
+                     'message': {'text': 'weather in Yountville'}},
+                ]}]}
+
+        class FakeClient(object):
+            def __init__(self):
+                self.calls = []
+
+            def run_actions(self, session_id, message):
+                self.calls.append((session_id, message))
+
+        original_client = messenger.client
+        fake_client = FakeClient()
+        messenger.client = fake_client
+        try:
+            response = self.post_signed_json(data)
+        finally:
+            messenger.client = original_client
+
+        self.assertEqual(response.status_int, 200)
+        self.assertEqual(fake_client.calls, [
+            ('user-2', 'weather in Yountville'),
+        ])
+
     def test_facebook_wit_failure_does_not_block_later_messages(self):
         data = {'object': 'page',
                 'entry': [{'messaging': [

@@ -51,6 +51,9 @@ ROOTED_CLEANUP_PLAN_PATH = (
 MESSENGER_CHALLENGE_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-12-messenger-challenge-plain-text.md"
 )
+MESSENGER_ECHO_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-13-messenger-echo-guard.md"
+)
 
 
 class FakeBottle:
@@ -319,6 +322,50 @@ def test_messenger_post_ignores_non_message_events():
 
     assert_equal(body, "ok", "non-message event response")
     assert_equal(calls, [], "non-message events must not call Wit actions")
+
+
+def test_messenger_post_ignores_echoes_and_continues_batch():
+    messenger, request, response, _requests, calls = load_messenger()
+    request.json = {
+        "object": "page",
+        "entry": [{
+            "messaging": [
+                {
+                    "sender": {"id": "page-1"},
+                    "message": {"text": "page reply", "is_echo": True},
+                },
+                {
+                    "sender": {"id": "user-1"},
+                    "message": {"text": "weather in Yountville"},
+                },
+            ]
+        }],
+    }
+    response.status = 200
+
+    body = messenger.messenger_post()
+
+    assert_equal(body, "ok", "Messenger echo event response")
+    assert_equal(calls, [("user-1", "weather in Yountville")], "post-echo Wit call")
+
+
+def test_messenger_post_requires_boolean_true_echo_flag():
+    messenger, request, response, _requests, calls = load_messenger()
+    request.json = {
+        "object": "page",
+        "entry": [{
+            "messaging": [{
+                "sender": {"id": "user-1"},
+                "message": {"text": "weather", "is_echo": "false"},
+            }]
+        }],
+    }
+    response.status = 200
+
+    body = messenger.messenger_post()
+
+    assert_equal(body, "ok", "non-boolean echo flag response")
+    assert_equal(calls, [("user-1", "weather")], "non-boolean echo flag Wit call")
 
 
 def test_messenger_post_routes_text_messages_to_wit():
@@ -737,6 +784,7 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(MESSENGER_CONTENT_TYPE_PLAN_PATH, "weatherbot Messenger JSON content type")
     assert_completed_plan(ROOTED_CLEANUP_PLAN_PATH, "weatherbot root-independent cleanup")
     assert_completed_plan(MESSENGER_CHALLENGE_PLAN_PATH, "weatherbot Messenger challenge plain text")
+    assert_completed_plan(MESSENGER_ECHO_PLAN_PATH, "weatherbot Messenger echo guard")
 
 
 def test_runtime_dependencies_and_ci_are_pinned():
@@ -858,6 +906,8 @@ def main():
         test_messenger_verification_accepts_matching_token,
         test_messenger_verification_requires_challenge,
         test_messenger_post_ignores_non_message_events,
+        test_messenger_post_ignores_echoes_and_continues_batch,
+        test_messenger_post_requires_boolean_true_echo_flag,
         test_messenger_post_routes_text_messages_to_wit,
         test_messenger_post_isolates_wit_failures_per_message,
         test_messenger_post_propagates_unexpected_action_errors,

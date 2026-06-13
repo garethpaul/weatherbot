@@ -123,6 +123,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   media-type requirement on signed Messenger webhook requests.
 - See `docs/plans/2026-06-12-messenger-challenge-plain-text.md` for the
   reflected-XSS-safe verification challenge response contract.
+- See `docs/plans/2026-06-13-messenger-echo-guard.md` for ignoring page echo
+  events without hiding later user messages in the same webhook batch.
 
 ## Contributing
 

@@ -190,6 +190,8 @@ def messenger_text_messages(data):
                 continue
             sender = event.get('sender') or {}
             message = event.get('message') or {}
+            if message.get('is_echo') is True:
+                continue
             fb_id = clean_text_value(sender.get('id'))
             text = clean_text_value(message.get('text'))
             if fb_id and text:
