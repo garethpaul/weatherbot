@@ -48,6 +48,9 @@ Recent non-empty Messenger message IDs are claimed before Wit actions in a
 bounded process-local cache. Duplicate deliveries are acknowledged without
 repeating actions, while failed actions release their claims for provider
 retries. Claims do not span workers or process restarts.
+Each signed webhook processes at most 20 valid Messenger user messages in
+payload order. Malformed nested sender or message values are ignored without
+preventing later valid events from reaching Wit.
 
 For web services, APIs, sockets, or scraping workflows, prioritize reports involving authentication bypass, authorization errors, injection, server-side request forgery, unsafe deserialization, credential leakage, data exposure, or denial-of-service conditions. Use test accounts and minimal proof-of-concept traffic only.
 

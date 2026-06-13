@@ -75,6 +75,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   the valid webhook can be acknowledged.
 - Recent non-empty Messenger message IDs are claimed in a bounded process-local
   cache so retries do not repeat Wit actions; failed actions release claims.
+- Signed Messenger batches process at most 20 valid user messages in payload
+  order; malformed nested events and echoes do not hide later valid messages.
 - `OPEN_WEATHER_TOKEN` configures OpenWeather lookup.
 - `REQUEST_TIMEOUT` optionally overrides outbound request timeout seconds;
   invalid, non-finite, or non-positive values fall back to `5.0`.
@@ -129,6 +131,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   events without hiding later user messages in the same webhook batch.
 - See `docs/plans/2026-06-13-messenger-message-replay-guard.md` for bounded
   process-local retry suppression and per-message failure recovery.
+- See `docs/plans/2026-06-13-messenger-batch-processing-bound.md` for ordered,
+  bounded Messenger batch handling and malformed-event isolation.
 
 ## Contributing
 

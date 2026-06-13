@@ -112,6 +112,48 @@ class TestMessenger(unittest.TestCase):
             ('user-2', 'weather in Yountville'),
         ])
 
+    def test_facebook_malformed_nested_events_do_not_hide_later_messages(self):
+        data = {'object': 'page',
+                'entry': [{'messaging': [
+                    {'sender': ['malformed'], 'message': {'text': 'ignored'}},
+                    {'sender': {'id': 'ignored'}, 'message': ['malformed']},
+                    {'sender': {'id': 'user-2'},
+                     'message': {'text': 'weather in Yountville'}},
+                ]}]}
+        calls = []
+        original_client = messenger.client
+        messenger.client = mock.Mock(
+            run_actions=lambda session_id, message: calls.append((session_id, message)))
+        try:
+            response = self.post_signed_json(data)
+        finally:
+            messenger.client = original_client
+
+        self.assertEqual(response.status_int, 200)
+        self.assertEqual(calls, [('user-2', 'weather in Yountville')])
+
+    def test_facebook_caps_valid_message_batch(self):
+        events = [
+            {'sender': {'id': 'user-{0}'.format(index)},
+             'message': {'mid': 'batch-{0}'.format(index),
+                         'text': 'weather-{0}'.format(index)}}
+            for index in range(messenger.MAX_MESSENGER_MESSAGES_PER_WEBHOOK + 1)
+        ]
+        calls = []
+        original_client = messenger.client
+        messenger.client = mock.Mock(
+            run_actions=lambda session_id, message: calls.append((session_id, message)))
+        try:
+            response = self.post_signed_json(
+                {'object': 'page', 'entry': [{'messaging': events}]})
+        finally:
+            messenger.client = original_client
+
+        self.assertEqual(response.status_int, 200)
+        self.assertEqual(len(calls), messenger.MAX_MESSENGER_MESSAGES_PER_WEBHOOK)
+        self.assertEqual(calls[0], ('user-0', 'weather-0'))
+        self.assertEqual(calls[-1], ('user-19', 'weather-19'))
+
     def test_facebook_replayed_message_id_runs_actions_once(self):
         class FakeClient(object):
             def __init__(self):

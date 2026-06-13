@@ -1,6 +1,6 @@
 # Bound Messenger Batch Processing
 
-Status: Planned
+Status: Completed
 
 ## Problem
 
@@ -34,12 +34,23 @@ the whole batch.
 
 ## Verification
 
-- Run focused batch tests and hostile mutations under explicit timeouts.
-- Run local and external-working-directory `make check` under explicit
-  timeouts.
-- Audit Python syntax, workflow YAML, intended paths, generated artifacts,
-  conflict markers, whitespace, and changed-line credential patterns.
-- Do not use live Messenger, Wit.ai, or OpenWeather credentials or requests.
+- Five focused dependency-free contracts passed for malformed nested events,
+  the valid-message cap, replay continuation, Wit failure isolation, and source
+  requirements.
+- Three focused Bottle/WebTest cases passed for malformed nested events, the
+  per-webhook cap, and duplicate replay continuation.
+- Eight hostile mutations covering cap inflation/removal, nested-shape guard
+  removal, replay short-circuiting, both failure-release paths, and missing
+  runtime tests were rejected.
+- Final local and external-working-directory `make check` runs passed under
+  explicit three-minute timeouts with 46 dependency-free contracts and 27
+  runtime tests.
+- A fresh pinned Python 3.12 environment passed `pip check` and both full gates
+  with the machine-wide `PYTHONPATH` removed.
+- Python syntax, workflow YAML, intended paths, generated artifacts, conflict
+  markers, whitespace, and changed-line credential patterns are included in
+  the final audit.
+- No live Messenger, Wit.ai, or OpenWeather credentials or requests were used.
 
 ## Scope Boundaries
 

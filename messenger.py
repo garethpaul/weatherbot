@@ -64,6 +64,7 @@ debug(truthy_env('WEATHERBOT_DEBUG'))
 app = Bottle()
 MAX_MESSENGER_WEBHOOK_BYTES = 1024 * 1024
 MAX_RECENT_MESSENGER_MESSAGE_IDS = 1024
+MAX_MESSENGER_MESSAGES_PER_WEBHOOK = 20
 
 
 class RecentMessageIds(object):
@@ -223,8 +224,10 @@ def messenger_text_messages(data):
         for event in events:
             if not isinstance(event, dict):
                 continue
-            sender = event.get('sender') or {}
-            message = event.get('message') or {}
+            sender = event.get('sender')
+            message = event.get('message')
+            if not isinstance(sender, dict) or not isinstance(message, dict):
+                continue
             if message.get('is_echo') is True:
                 continue
             fb_id = clean_text_value(sender.get('id'))
@@ -232,6 +235,8 @@ def messenger_text_messages(data):
             message_id = clean_text_value(message.get('mid'))
             if fb_id and text:
                 messages.append((fb_id, text, message_id))
+                if len(messages) >= MAX_MESSENGER_MESSAGES_PER_WEBHOOK:
+                    return messages
     return messages
 
 
