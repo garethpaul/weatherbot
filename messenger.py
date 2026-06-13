@@ -22,6 +22,8 @@ import hashlib
 import math
 import os
 import requests
+import threading
+from collections import OrderedDict
 from sys import argv
 from wit import Wit, WitError
 from bottle import Bottle, request, response, debug
@@ -61,6 +63,31 @@ REQUEST_TIMEOUT = positive_float_from_env('REQUEST_TIMEOUT', 5.0)
 debug(truthy_env('WEATHERBOT_DEBUG'))
 app = Bottle()
 MAX_MESSENGER_WEBHOOK_BYTES = 1024 * 1024
+MAX_RECENT_MESSENGER_MESSAGE_IDS = 1024
+
+
+class RecentMessageIds(object):
+    def __init__(self, max_entries):
+        self.max_entries = max_entries
+        self._ids = OrderedDict()
+        self._lock = threading.Lock()
+
+    def claim(self, message_id):
+        with self._lock:
+            if message_id in self._ids:
+                return False
+            self._ids[message_id] = None
+            while len(self._ids) > self.max_entries:
+                self._ids.popitem(last=False)
+            return True
+
+    def release(self, message_id):
+        with self._lock:
+            self._ids.pop(message_id, None)
+
+
+recent_messenger_message_ids = RecentMessageIds(
+    MAX_RECENT_MESSENGER_MESSAGE_IDS)
 
 
 # Facebook Messenger GET Webhook
@@ -141,12 +168,20 @@ def messenger_post():
         response.status = 400
         return 'Invalid payload'
 
-    for fb_id, text in messenger_text_messages(data):
+    for fb_id, text, message_id in messenger_text_messages(data):
+        if message_id and not recent_messenger_message_ids.claim(message_id):
+            continue
         # Let's forward the message to the Wit.ai Bot Engine
         try:
             client.run_actions(session_id=fb_id, message=text)
         except WitError:
+            if message_id:
+                recent_messenger_message_ids.release(message_id)
             continue
+        except Exception:
+            if message_id:
+                recent_messenger_message_ids.release(message_id)
+            raise
 
     # must send back response quickly
     return 'ok'
@@ -172,7 +207,7 @@ def verify_messenger_signature(raw_body, signature, app_secret):
 
 def messenger_text_messages(data):
     """
-    Extract supported Messenger sender/text pairs from a webhook payload.
+    Extract supported Messenger sender/text/message-ID tuples from a payload.
     """
     messages = []
     entries = data.get('entry')
@@ -194,8 +229,9 @@ def messenger_text_messages(data):
                 continue
             fb_id = clean_text_value(sender.get('id'))
             text = clean_text_value(message.get('text'))
+            message_id = clean_text_value(message.get('mid'))
             if fb_id and text:
-                messages.append((fb_id, text))
+                messages.append((fb_id, text, message_id))
     return messages
 
 
