@@ -80,4 +80,3 @@ names, and pass/fail status for these checks:
 Never attach raw webhook payloads, conversation logs, provider responses,
 authorization headers, signatures, tokens, page IDs, or user identifiers.
 Unresolved verification or credential-boundary failures block deployment.
-
