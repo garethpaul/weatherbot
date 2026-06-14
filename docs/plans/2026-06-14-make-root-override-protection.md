@@ -1,6 +1,6 @@
 # Protect the Make Repository Root from Overrides
 
-## Status: Planned
+## Status: Completed
 
 ## Context
 
@@ -28,3 +28,20 @@ redirect verification away from the reviewed checkout.
 
 - Do not alter runtime behavior, dependencies, workflows, or provider policy.
 - Do not merge or close stacked pull requests without owner authorization.
+
+## Work Completed
+
+- Protected the Makefile-derived root while preserving the Python override and
+  rooted final cleanup.
+- Added exact-line checker contracts and registered this completed plan.
+
+## Verification
+
+- Python compilation and the focused hosted/Makefile contract passed.
+- Local, absolute-Makefile external-directory, and hostile-root `make check`
+  runs passed under 300-second timeouts with 46 dependency-free contracts and
+  27 runtime tests.
+- Nine hostile root, checker, Python override, cleanup, and plan-status
+  mutations were rejected.
+- `uv pip check` passed all 12 packages in the fresh pinned Python 3.12
+  environment; YAML, artifact, whitespace, and credential audits passed.

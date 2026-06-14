@@ -60,6 +60,9 @@ MESSENGER_REPLAY_PLAN_PATH = (
 MESSENGER_BATCH_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-13-messenger-batch-processing-bound.md"
 )
+MAKE_ROOT_PROTECTION_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-14-make-root-override-protection.md"
+)
 
 
 class FakeBottle:
@@ -994,6 +997,7 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(MESSENGER_ECHO_PLAN_PATH, "weatherbot Messenger echo guard")
     assert_completed_plan(MESSENGER_REPLAY_PLAN_PATH, "weatherbot Messenger replay guard")
     assert_completed_plan(MESSENGER_BATCH_PLAN_PATH, "weatherbot Messenger batch processing bound")
+    assert_completed_plan(MAKE_ROOT_PROTECTION_PLAN_PATH, "weatherbot Make root override protection")
 
 
 def test_runtime_dependencies_and_ci_are_pinned():
@@ -1036,7 +1040,9 @@ def test_runtime_dependencies_and_ci_are_pinned():
     assert_true("# v6.0.3" in workflow, "checkout pin annotation must identify the exact release")
     assert_true("# v6.2.0" in workflow, "setup-python pin annotation must identify the exact release")
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    assert_true("ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))" in makefile, "Makefile must resolve the repository root")
+    makefile_lines = set(makefile.splitlines())
+    assert_true("override ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))" in makefile_lines, "Makefile must protect the repository root")
+    assert_true("PYTHON ?= python3" in makefile_lines, "Makefile must preserve the Python command override")
     assert_true('find "$(ROOT)"' in makefile, "Makefile cleanup must stay inside the repository")
     assert_true('"$(ROOT)/scripts/check_weatherbot_contracts.py"' in makefile, "Makefile must use the rooted contract path")
     assert_true('$(MAKE) -f "$(ROOT)/Makefile" clean' in makefile, "final cleanup must use the repository Makefile")

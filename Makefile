@@ -1,5 +1,5 @@
 PYTHON ?= python3
-ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+override ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
 PYTHON_FILES = messenger.py wit.py test_messenger.py scripts/check_weatherbot_contracts.py
 
