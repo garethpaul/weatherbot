@@ -1,6 +1,6 @@
 # Weatherbot Provider Setup Guide
 
-## Status: Planned
+## Status: Completed
 
 ## Context
 
@@ -37,3 +37,22 @@ define a safe setup and verification sequence.
   dependencies, workflows, or deployment configuration.
 - Do not make live Wit.ai, Messenger, or OpenWeather calls.
 - Do not merge or close stacked pull requests without owner authorization.
+
+## Work Completed
+
+- Added provider ownership, credential-purpose, HTTPS callback, GET verification,
+  signed JSON POST, optional-setting, setup-order, and evidence guidance.
+- Linked the guide from repository documentation and made its requirements,
+  roadmap priority, suite registration, and completed plan mutation-sensitive.
+
+## Verification
+
+- Focused provider-guide and completed-plan contracts passed.
+- Repository and external-directory `make check` passed.
+- Thirteen hostile provider-guide mutations were rejected across credential
+  purposes, endpoints, HTTPS, GET verification, POST signatures, media types,
+  privacy, optional settings, evidence, roadmap, suite registration, and plan
+  status.
+- Dependency integrity, artifact, credential, and exact-diff audits passed.
+  Hosted verification is recorded against the exact pull-request head after
+  push.

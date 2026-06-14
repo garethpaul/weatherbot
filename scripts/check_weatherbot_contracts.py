@@ -63,6 +63,9 @@ MESSENGER_BATCH_PLAN_PATH = (
 MAKE_ROOT_PROTECTION_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-14-make-root-override-protection.md"
 )
+PROVIDER_SETUP_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-14-provider-setup-guide.md"
+)
 
 
 class FakeBottle:
@@ -998,6 +1001,55 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(MESSENGER_REPLAY_PLAN_PATH, "weatherbot Messenger replay guard")
     assert_completed_plan(MESSENGER_BATCH_PLAN_PATH, "weatherbot Messenger batch processing bound")
     assert_completed_plan(MAKE_ROOT_PROTECTION_PLAN_PATH, "weatherbot Make root override protection")
+    assert_completed_plan(PROVIDER_SETUP_PLAN_PATH, "weatherbot provider setup guide")
+    checker_main = Path(__file__).read_text().rsplit("def main():", 1)[1]
+    assert_true(
+        "test_provider_setup_guide_is_auditable," in checker_main,
+        "provider setup guide contract must run in the main suite",
+    )
+
+
+def test_provider_setup_guide_is_auditable():
+    guide = " ".join((ROOT / "PROVIDER_SETUP.md").read_text(encoding="utf-8").split())
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    vision = (ROOT / "VISION.md").read_text(encoding="utf-8")
+    changes = (ROOT / "CHANGES.md").read_text(encoding="utf-8")
+
+    for contract in (
+        "`WIT_TOKEN` | Wit.ai app",
+        "`FB_PAGE_TOKEN` | Meta Messenger page",
+        "`FB_VERIFY_TOKEN` | Operator-chosen secret",
+        "`FB_APP_SECRET` | Meta app",
+        "`OPEN_WEATHER_TOKEN` | OpenWeather account",
+        "configure this exact callback URL in the Meta app",
+        "https://<public-host>/webhook",
+        "`GET /webhook` handles subscription verification",
+        "returns the challenge as plain text only when",
+        "`POST /webhook` handles events",
+        "`Content-Type: application/json`",
+        "valid `X-Hub-Signature-256` generated with `FB_APP_SECRET`",
+        "body no larger than 1 MiB",
+        "provider-facing callback must be HTTPS",
+        "`REQUEST_TIMEOUT` sets a positive finite outbound timeout",
+        "`WEATHERBOT_DEBUG=1` enables Bottle debug mode for local development only",
+        "Run `make check` locally or in CI before any optional live provider test",
+        "Never attach raw webhook payloads",
+        "Unresolved verification or credential-boundary failures block deployment",
+    ):
+        assert_true(contract in guide, "provider setup guide must include {0}".format(contract))
+    assert_true("See `PROVIDER_SETUP.md`" in readme, "README must link the provider setup guide")
+    assert_true(
+        "docs/plans/2026-06-14-provider-setup-guide.md" in readme,
+        "README must link the provider setup plan",
+    )
+    assert_true(
+        "Keep provider credential ownership, HTTPS webhook wiring" in vision,
+        "VISION must preserve provider setup guidance",
+    )
+    assert_true(
+        "secret-safe provider setup guide" in changes,
+        "CHANGES must record provider setup guidance",
+    )
 
 
 def test_runtime_dependencies_and_ci_are_pinned():
@@ -1155,6 +1207,7 @@ def main():
         test_get_forecast_handles_malformed_weather_results,
         test_get_forecast_handles_weather_lookup_exceptions,
         test_completed_plans_are_in_docs_plans,
+        test_provider_setup_guide_is_auditable,
         test_runtime_dependencies_and_ci_are_pinned,
     ]
     for test in tests:

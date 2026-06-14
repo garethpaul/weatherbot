@@ -65,6 +65,9 @@ When the required SDK or runtime is unavailable, use static checks and source re
 
 ## Configuration and Secrets
 
+- See `PROVIDER_SETUP.md` for provider ownership, secret injection, the shared
+  HTTPS `/webhook` GET/POST contract, optional settings, setup order, and
+  redacted verification evidence.
 - `WIT_TOKEN` configures Wit.ai access.
 - `FB_PAGE_TOKEN` configures Facebook Messenger replies.
 - `FB_VERIFY_TOKEN` configures Messenger webhook verification.
@@ -133,6 +136,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   process-local retry suppression and per-message failure recovery.
 - See `docs/plans/2026-06-13-messenger-batch-processing-bound.md` for ordered,
   bounded Messenger batch handling and malformed-event isolation.
+- See `docs/plans/2026-06-14-provider-setup-guide.md` for provider credential,
+  endpoint, and redacted verification guidance.
 
 ## Contributing
 

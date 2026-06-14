@@ -1,5 +1,11 @@
 # Changes
 
+## 2026-06-14
+
+- Added a secret-safe provider setup guide covering all five required
+  credentials, the shared HTTPS Messenger webhook, optional settings, setup
+  order, and redacted verification evidence.
+
 ## 2026-06-13
 
 - Capped each signed Messenger webhook at 20 valid Wit action messages while
