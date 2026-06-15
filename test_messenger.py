@@ -441,6 +441,9 @@ class TestMessenger(unittest.TestCase):
             def __init__(self, user_id):
                 self.content = json.dumps({'recipient_id': user_id})
 
+            def raise_for_status(self):
+                return None
+
         def fake_post(url, **kwargs):
             calls.append((url, kwargs))
             return FakeResponse(self.user_id)
@@ -457,6 +460,22 @@ class TestMessenger(unittest.TestCase):
         self.assertEqual(calls[0][1]['headers']['Authorization'],
                          'Bearer ' + messenger.FB_PAGE_TOKEN)
         self.assertEqual(calls[0][1]['timeout'], messenger.REQUEST_TIMEOUT)
+
+    def test_facebook_response_raises_for_http_error(self):
+        original_post = messenger.requests.post
+
+        class FailedResponse(object):
+            content = b'provider error'
+
+            def raise_for_status(self):
+                raise RuntimeError('provider rejected reply')
+
+        messenger.requests.post = lambda _url, **_kwargs: FailedResponse()
+        try:
+            with self.assertRaisesRegex(RuntimeError, 'provider rejected reply'):
+                messenger.fb_message(self.user_id, 'hello this is a test')
+        finally:
+            messenger.requests.post = original_post
 
     def test_weather(self):
         original_get = messenger.requests.get

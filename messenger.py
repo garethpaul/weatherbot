@@ -267,6 +267,7 @@ def fb_message(sender_id, text):
         json=data,
         headers={'Authorization': 'Bearer {0}'.format(FB_PAGE_TOKEN or '')},
         timeout=REQUEST_TIMEOUT)
+    resp.raise_for_status()
     return resp.content
 
 

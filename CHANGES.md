@@ -1,5 +1,10 @@
 # Changes
 
+## 2026-06-15
+
+- Rejected unsuccessful Messenger provider responses before accepting reply
+  content, allowing failed message-ID claims to be retried.
+
 ## 2026-06-14
 
 - Added a secret-safe provider setup guide covering all five required

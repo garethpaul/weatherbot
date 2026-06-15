@@ -66,6 +66,9 @@ MAKE_ROOT_PROTECTION_PLAN_PATH = (
 PROVIDER_SETUP_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-14-provider-setup-guide.md"
 )
+MESSENGER_REPLY_HTTP_STATUS_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-15-messenger-reply-http-status.md"
+)
 
 
 class FakeBottle:
@@ -96,9 +99,10 @@ class MutableResponse:
 
 
 class FakeHTTPResponse:
-    def __init__(self, content, payload=None):
+    def __init__(self, content, payload=None, error=None):
         self.content = content
         self._payload = payload or {}
+        self._error = error
         self.status_code = 200
         self.reason = "OK"
 
@@ -106,17 +110,20 @@ class FakeHTTPResponse:
         return self._payload
 
     def raise_for_status(self):
-        return None
+        if self._error is not None:
+            raise self._error
 
 
 class FakeRequests(types.SimpleNamespace):
     def __init__(self):
         super(FakeRequests, self).__init__()
         self.calls = []
+        self.response_error = None
 
     def post(self, url, **kwargs):
         self.calls.append(("post", url, kwargs))
-        return FakeHTTPResponse(b'{"recipient_id": "user-1"}')
+        return FakeHTTPResponse(
+            b'{"recipient_id": "user-1"}', error=self.response_error)
 
     def get(self, url, params=None, **kwargs):
         kwargs["params"] = params
@@ -756,6 +763,57 @@ def test_fb_message_uses_header_auth_and_timeout():
     )
 
 
+def test_messenger_post_releases_claim_after_provider_http_error():
+    messenger, request, _response, requests, _calls = load_messenger()
+    request.json = messenger_payload("mid-provider-http-error")
+    requests.response_error = RuntimeError("provider rejected reply")
+    messenger.client = types.SimpleNamespace(
+        run_actions=lambda session_id, message: messenger.fb_message(session_id, message)
+    )
+
+    try:
+        messenger.messenger_post()
+        raise AssertionError("Messenger provider HTTP errors must propagate")
+    except RuntimeError as exc:
+        assert_equal(str(exc), "provider rejected reply", "provider HTTP error")
+
+    requests.response_error = None
+    assert_equal(messenger.messenger_post(), "ok", "retry after provider HTTP error")
+    post_calls = [call for call in requests.calls if call[0] == "post"]
+    assert_equal(len(post_calls), 2, "provider HTTP error must release replay claim")
+
+
+def test_fb_message_http_status_source_contracts():
+    source = (ROOT / "messenger.py").read_text(encoding="utf-8")
+    runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
+    reply_start = source.index("def fb_message")
+    reply_end = source.index("def get_weather", reply_start)
+    reply_source = source[reply_start:reply_end]
+    post_position = reply_source.index("requests.post(")
+    status_position = reply_source.index("resp.raise_for_status()")
+    return_position = reply_source.index("return resp.content")
+    assert_true(
+        post_position < status_position < return_position,
+        "Messenger reply must reject provider HTTP errors before returning content",
+    )
+    assert_true(
+        "test_facebook_response_raises_for_http_error" in runtime_tests,
+        "Bottle/WebTest suite must cover Messenger provider HTTP errors",
+    )
+
+    docs = {
+        "README.md": "Unsuccessful Messenger provider HTTP responses raise",
+        "SECURITY.md": "Messenger provider HTTP errors propagate",
+        "VISION.md": "Fail Messenger replies on provider HTTP errors",
+        "CHANGES.md": "Rejected unsuccessful Messenger provider responses",
+    }
+    for relative_path, phrase in docs.items():
+        assert_true(
+            phrase in (ROOT / relative_path).read_text(encoding="utf-8"),
+            "{0} must document Messenger provider HTTP failures".format(relative_path),
+        )
+
+
 def test_weather_lookup_uses_https_params_and_timeout():
     messenger, _request, _response, requests, _calls = load_messenger()
 
@@ -1002,6 +1060,7 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(MESSENGER_BATCH_PLAN_PATH, "weatherbot Messenger batch processing bound")
     assert_completed_plan(MAKE_ROOT_PROTECTION_PLAN_PATH, "weatherbot Make root override protection")
     assert_completed_plan(PROVIDER_SETUP_PLAN_PATH, "weatherbot provider setup guide")
+    assert_completed_plan(MESSENGER_REPLY_HTTP_STATUS_PLAN_PATH, "weatherbot Messenger reply HTTP status")
     checker_main = Path(__file__).read_text().rsplit("def main():", 1)[1]
     assert_true(
         "test_provider_setup_guide_is_auditable," in checker_main,
@@ -1193,6 +1252,8 @@ def main():
         test_messenger_post_ignores_invalid_sender_ids,
         test_messenger_post_trims_sender_id,
         test_fb_message_uses_header_auth_and_timeout,
+        test_messenger_post_releases_claim_after_provider_http_error,
+        test_fb_message_http_status_source_contracts,
         test_weather_lookup_uses_https_params_and_timeout,
         test_weather_lookup_handles_malformed_results,
         test_request_timeout_accepts_positive_float_env,

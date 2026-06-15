@@ -1,6 +1,6 @@
 # Fail Messenger Replies on Provider HTTP Errors
 
-## Status: In Progress
+## Status: Completed
 
 ## Context
 
@@ -32,8 +32,25 @@ does not raise and the webhook's message-ID claim remains consumed.
 - Do not add automatic provider retries or change provider endpoints or tokens.
 - Do not merge or close stacked pull requests without owner authorization.
 
-## Work Pending
+## Work Completed
 
-- Add the provider HTTP status boundary and mutation-sensitive regressions.
-- Update operator and security documentation.
-- Run the bounded verification and record the actual evidence.
+- Added an explicit provider HTTP status check before Messenger reply content is
+  accepted.
+- Added dependency-free and Bottle/WebTest regressions proving provider HTTP
+  errors propagate through Wit actions and release replay claims.
+- Added fail-closed source-order, runtime-test, documentation, and completed-plan
+  contracts, plus operator and security documentation.
+
+## Verification
+
+- Focused HTTP-status contracts passed 3 tests, and the dependency-free suite
+  passed 49 tests.
+- Repository and external-directory `make check` passed under pinned Python
+  3.12, with 49 contracts and 28 runtime tests in each run.
+- Five targeted behavior and documentation mutations were rejected before plan
+  completion; the completed-plan mutation was then rejected separately.
+- `uv pip check` passed for all 13 installed packages. Direct `pip-audit` runs
+  found no known vulnerabilities in runtime or test requirements; the private
+  WebOb build was explicitly reported as unavailable on PyPI and unauditable.
+- A broader disposable-environment audit found vulnerabilities only in that
+  environment's `pip 24.3.1`, which is tooling and is not a repository pin.
