@@ -69,6 +69,9 @@ PROVIDER_SETUP_PLAN_PATH = (
 MESSENGER_REPLY_HTTP_STATUS_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-15-messenger-reply-http-status.md"
 )
+WEATHER_FAILURE_MESSAGE_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-16-weather-failure-user-message.md"
+)
 
 
 class FakeBottle:
@@ -850,6 +853,72 @@ def test_weather_lookup_handles_malformed_results():
         assert_equal(messenger.get_weather("Yountville"), None, "malformed weather response")
 
 
+def test_send_uses_weather_failure_user_message():
+    messenger, _request, _response, _requests, _calls = load_messenger()
+    replies = []
+    messenger.fb_message = lambda user_id, text: replies.append((user_id, text))
+
+    messenger.send(
+        {"session_id": "user-1", "context": {"missingForecast": True}},
+        {},
+    )
+    assert_equal(
+        replies,
+        [("user-1", "I couldn't get the weather right now. Please try again.")],
+        "missing forecast reply",
+    )
+
+    for context in ({}, {"missingLocation": True}, {"missingForecast": False}, {"missingForecast": 1}, None, []):
+        replies[:] = []
+        messenger.send(
+            {"session_id": "user-1", "context": context},
+            {"text": "Which location should I check?"},
+        )
+        assert_equal(
+            replies,
+            [("user-1", "Which location should I check?")],
+            "non-failure reply for context {0!r}".format(context),
+        )
+
+    replies[:] = []
+    messenger.send(
+        {"session_id": "user-1"},
+        {"text": "Which location should I check?"},
+    )
+    assert_equal(
+        replies,
+        [("user-1", "Which location should I check?")],
+        "missing context reply",
+    )
+
+    source = (ROOT / "messenger.py").read_text(encoding="utf-8")
+    runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
+    assert_true(
+        "context.get('missingForecast') is True" in source,
+        "weather fallback must require exact boolean missingForecast state",
+    )
+    assert_true(
+        "test_send_uses_stable_text_for_missing_forecast" in runtime_tests,
+        "Bottle/WebTest suite must cover the missing-forecast override",
+    )
+    assert_true(
+        "test_send_preserves_wit_text_without_exact_missing_forecast" in runtime_tests,
+        "Bottle/WebTest suite must cover non-overriding contexts",
+    )
+
+    docs = {
+        "README.md": "Known-location weather lookup failures send a stable retry-later message",
+        "SECURITY.md": "Provider exception text and stale Wit forecast copy are",
+        "VISION.md": "Send stable retry-later text when a known-location forecast is unavailable",
+        "CHANGES.md": "Replaced stale Wit response text with a stable retry-later message",
+    }
+    for relative_path, phrase in docs.items():
+        assert_true(
+            phrase in (ROOT / relative_path).read_text(encoding="utf-8"),
+            "{0} must document the weather failure user message".format(relative_path),
+        )
+
+
 def test_request_timeout_accepts_positive_float_env():
     messenger_timeout, wit_timeout = load_timeout_values("2.5")
 
@@ -1061,6 +1130,7 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(MAKE_ROOT_PROTECTION_PLAN_PATH, "weatherbot Make root override protection")
     assert_completed_plan(PROVIDER_SETUP_PLAN_PATH, "weatherbot provider setup guide")
     assert_completed_plan(MESSENGER_REPLY_HTTP_STATUS_PLAN_PATH, "weatherbot Messenger reply HTTP status")
+    assert_completed_plan(WEATHER_FAILURE_MESSAGE_PLAN_PATH, "weatherbot weather failure user message")
     checker_main = Path(__file__).read_text().rsplit("def main():", 1)[1]
     assert_true(
         "test_provider_setup_guide_is_auditable," in checker_main,
@@ -1256,6 +1326,7 @@ def main():
         test_fb_message_http_status_source_contracts,
         test_weather_lookup_uses_https_params_and_timeout,
         test_weather_lookup_handles_malformed_results,
+        test_send_uses_weather_failure_user_message,
         test_request_timeout_accepts_positive_float_env,
         test_request_timeout_defaults_for_invalid_env,
         test_bottle_debug_is_disabled_by_default,

@@ -76,6 +76,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
 - Expected Wit transport and response failures are isolated to the affected
   Messenger event so later messages in an authenticated batch still run and
   the valid webhook can be acknowledged.
+- Known-location weather lookup failures send a stable retry-later message
+  instead of forwarding stale Wit forecast text or provider details.
 - Recent non-empty Messenger message IDs are claimed in a bounded process-local
   cache so retries do not repeat Wit actions; failed actions release claims.
 - Unsuccessful Messenger provider HTTP responses raise before reply content is
@@ -142,6 +144,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   endpoint, and redacted verification guidance.
 - See `docs/plans/2026-06-15-messenger-reply-http-status.md` for Messenger
   provider HTTP failure handling and replay-claim recovery.
+- See `docs/plans/2026-06-16-weather-failure-user-message.md` for the stable
+  user-facing reply when a known-location weather lookup is unavailable.
 
 ## Contributing
 

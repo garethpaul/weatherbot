@@ -30,6 +30,7 @@ Priority:
 - Normalize flat and nested Wit location values before weather lookup
 - Treat malformed OpenWeather results as missing forecasts
 - Treat OpenWeather lookup exceptions as missing forecasts
+- Send stable retry-later text when a known-location forecast is unavailable
 - Keep outbound request timeout configuration bounded and non-crashing
 - Keep Bottle debug mode disabled unless explicitly enabled locally
 - Avoid debug logging user messages, entities, or Wit response payloads
@@ -39,7 +40,6 @@ Priority:
 
 Next priorities:
 
-- Add user-facing fallback text for weather lookup failures
 - Document Python and dependency version constraints
 
 Contribution rules:

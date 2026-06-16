@@ -39,6 +39,9 @@ FB_APP_SECRET = os.environ.get('FB_APP_SECRET')
 OPEN_WEATHER_TOKEN = os.environ.get('OPEN_WEATHER_TOKEN')
 FB_MESSAGES_URL = 'https://graph.facebook.com/me/messages'
 OPEN_WEATHER_URL = 'https://api.openweathermap.org/data/2.5/weather'
+WEATHER_UNAVAILABLE_MESSAGE = (
+    "I couldn't get the weather right now. Please try again."
+)
 
 
 def positive_float_from_env(name, default):
@@ -317,7 +320,11 @@ def send(request, response):
     """
     # We use the fb_id as equal to session_id
     fb_id = request['session_id']
-    text = response['text']
+    context = request.get('context')
+    if isinstance(context, dict) and context.get('missingForecast') is True:
+        text = WEATHER_UNAVAILABLE_MESSAGE
+    else:
+        text = response['text']
     # send message
     fb_message(fb_id, text)
 

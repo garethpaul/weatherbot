@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-06-16
+
+- Replaced stale Wit response text with a stable retry-later message when a
+  known-location OpenWeather lookup fails.
+- Preserved normal Wit replies for successful forecasts, missing-location
+  prompts, absent context, and malformed non-boolean failure state.
+
 ## 2026-06-15
 
 - Rejected unsuccessful Messenger provider responses before accepting reply

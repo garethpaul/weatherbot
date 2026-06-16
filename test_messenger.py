@@ -477,6 +477,41 @@ class TestMessenger(unittest.TestCase):
         finally:
             messenger.requests.post = original_post
 
+    def test_send_uses_stable_text_for_missing_forecast(self):
+        with mock.patch.object(messenger, 'fb_message') as fb_message:
+            messenger.send(
+                {'session_id': self.user_id,
+                 'context': {'missingForecast': True}},
+                {})
+
+        fb_message.assert_called_once_with(
+            self.user_id,
+            "I couldn't get the weather right now. Please try again.")
+
+    def test_send_preserves_wit_text_without_exact_missing_forecast(self):
+        contexts = [
+            {},
+            {'missingLocation': True},
+            {'missingForecast': False},
+            {'missingForecast': 1},
+            None,
+            [],
+        ]
+
+        with mock.patch.object(messenger, 'fb_message') as fb_message:
+            for context in contexts:
+                request = {'session_id': self.user_id, 'context': context}
+                messenger.send(request, {'text': 'Which location should I check?'})
+                fb_message.assert_called_once_with(
+                    self.user_id, 'Which location should I check?')
+                fb_message.reset_mock()
+
+            messenger.send(
+                {'session_id': self.user_id},
+                {'text': 'Which location should I check?'})
+            fb_message.assert_called_once_with(
+                self.user_id, 'Which location should I check?')
+
     def test_weather(self):
         original_get = messenger.requests.get
 

@@ -1,6 +1,6 @@
 # Weather Failure User Message
 
-## Status: Planned
+## Status: Completed
 
 ## Context
 
@@ -48,3 +48,23 @@ the missing-location response remains owned by the existing Wit conversation.
 - Do not call live Messenger, Wit.ai, or OpenWeather services.
 - Do not add retry, localization, or conversational-state infrastructure.
 - Do not merge or close stacked pull requests without explicit authorization.
+
+## Work Completed
+
+- Added a stable retry-later message for exact boolean `missingForecast`
+  context at the final Messenger send boundary.
+- Preserved Wit response text for successful forecasts, missing-location state,
+  absent context, and malformed non-boolean failure values.
+- Added executable and dependency-free regressions plus documentation,
+  security, roadmap, and changelog contracts.
+
+## Verification Results
+
+- The focused missing-forecast and preservation tests passed.
+- The complete Bottle/WebTest suite passed all 30 tests.
+- Five isolated production mutations were rejected: disabled override, truthy
+  state broadening, removed fallback assignment, unsafe context indexing, and
+  restored dependency on Wit response text.
+- Repository and external-directory `make check` gates each passed 50
+  dependency-free contracts and all 30 Bottle/WebTest tests.
+- No live Messenger, Wit.ai, or OpenWeather request was made.
