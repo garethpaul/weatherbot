@@ -36,11 +36,8 @@ Priority:
 - Avoid debug logging user messages, entities, or Wit response payloads
 - Keep provider credential ownership, HTTPS webhook wiring, and redacted
   verification evidence explicit
-- Treat Python and API versions as legacy until documented
-
-Next priorities:
-
-- Document Python and dependency version constraints
+- Verified support covers Python 3.10, 3.12, and 3.14 with Bottle 0.13.4, Requests 2.34.2, and WebTest 3.0.7 pinned exactly.
+- Treat provider API behavior as credential-bound until live version contracts are reviewed
 
 Contribution rules:
 

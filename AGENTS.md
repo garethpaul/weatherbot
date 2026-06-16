@@ -26,6 +26,7 @@
 
 - Language mix noted in the README: Python (3).
 - Prefer dependency-free tests or stdlib checks when legacy packages are unavailable.
+- Verified support covers Python 3.10, 3.12, and 3.14 with Bottle 0.13.4, Requests 2.34.2, and WebTest 3.0.7 pinned exactly.
 
 ## Testing guidance
 

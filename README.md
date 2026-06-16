@@ -30,6 +30,7 @@ Additional scan context:
 
 - Git
 - Python 3.10 or newer; deployment tracks the Python 3.14 line
+- Verified support covers Python 3.10, 3.12, and 3.14 with Bottle 0.13.4, Requests 2.34.2, and WebTest 3.0.7 pinned exactly.
 
 ### Setup
 

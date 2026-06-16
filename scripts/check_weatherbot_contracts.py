@@ -72,6 +72,9 @@ MESSENGER_REPLY_HTTP_STATUS_PLAN_PATH = (
 WEATHER_FAILURE_MESSAGE_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-16-weather-failure-user-message.md"
 )
+VERSION_CONTRACT_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-16-python-dependency-version-contract.md"
+)
 
 
 class FakeBottle:
@@ -1131,10 +1134,15 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(PROVIDER_SETUP_PLAN_PATH, "weatherbot provider setup guide")
     assert_completed_plan(MESSENGER_REPLY_HTTP_STATUS_PLAN_PATH, "weatherbot Messenger reply HTTP status")
     assert_completed_plan(WEATHER_FAILURE_MESSAGE_PLAN_PATH, "weatherbot weather failure user message")
+    assert_completed_plan(VERSION_CONTRACT_PLAN_PATH, "weatherbot Python and dependency versions")
     checker_main = Path(__file__).read_text().rsplit("def main():", 1)[1]
     assert_true(
         "test_provider_setup_guide_is_auditable," in checker_main,
         "provider setup guide contract must run in the main suite",
+    )
+    assert_true(
+        "test_supported_version_guidance," in checker_main,
+        "supported version guidance contract must run in the main suite",
     )
 
 
@@ -1239,6 +1247,42 @@ def test_runtime_dependencies_and_ci_are_pinned():
     assert_true("test_facebook_verification_challenge_is_plain_text" in runtime_tests, "WebTest must cover challenge response type")
 
 
+def test_supported_version_guidance():
+    guidance = (
+        "Verified support covers Python 3.10, 3.12, and 3.14 with Bottle 0.13.4, "
+        "Requests 2.34.2, and WebTest 3.0.7 pinned exactly."
+    )
+    documents = {
+        name: (ROOT / name).read_text(encoding="utf-8")
+        for name in ("AGENTS.md", "README.md", "SECURITY.md", "VISION.md", "CHANGES.md")
+    }
+    for name, text in documents.items():
+        assert_true(guidance in text, name + " must document the supported version contract")
+    assert_true(
+        "Treat Python and API versions as legacy until documented" not in documents["VISION.md"],
+        "VISION must remove the stale undocumented-version classification",
+    )
+    assert_true(
+        "Document Python and dependency version constraints" not in documents["VISION.md"],
+        "VISION must remove the completed version-documentation priority",
+    )
+
+    plan = VERSION_CONTRACT_PLAN_PATH.read_text(encoding="utf-8")
+    assert_equal(plan.count("Status: Completed"), 1, "version plan completed status")
+    assert_equal(plan.count("Status:"), 1, "version plan status count")
+    verification = plan.split("## Verification Results", 1)[-1]
+    for evidence in (
+        "Bottle/WebTest route suite",
+        "external-directory `make check`",
+        "hostile mutations",
+    ):
+        assert_true(evidence in verification, "version plan verification: " + evidence)
+    assert_true(
+        not any(word in verification.lower() for word in ("pending", "todo", "tbd", "not run")),
+        "version plan verification must not contain placeholders",
+    )
+
+
 def test_messenger_post_rejects_oversized_declared_body():
     messenger, request, response, _requests, calls = load_messenger()
     request.content_length = messenger.MAX_MESSENGER_WEBHOOK_BYTES + 1
@@ -1341,6 +1385,7 @@ def main():
         test_completed_plans_are_in_docs_plans,
         test_provider_setup_guide_is_auditable,
         test_runtime_dependencies_and_ci_are_pinned,
+        test_supported_version_guidance,
     ]
     for test in tests:
         test()

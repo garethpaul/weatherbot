@@ -1,6 +1,6 @@
 # Document Python and Dependency Versions
 
-Status: Planned
+Status: Completed
 
 ## Context
 
@@ -51,3 +51,19 @@ matrix.
   an offline version guarantee by this documentation.
 - PR #18 will be stacked on open PR #17 and requires base-first ordering;
   neither pull request may be merged or closed without explicit authorization.
+
+## Verification Results
+
+Completed on 2026-06-16:
+
+- Bottle/WebTest route suite: a clean Python 3.12 environment installed Bottle
+  0.13.4, Requests 2.34.2, and WebTest 3.0.7, passed `pip check`, and ran all 30
+  route tests.
+- The dependency-free contract suite passed 51 checks, including the manifest,
+  Python matrix, guidance, and completed-plan contracts.
+- Repository and external-directory `make check` passed with the pinned
+  environment and the shell's unrelated `PYTHONPATH` unset.
+- Six hostile mutations were rejected across the runtime pin, test pin, Python
+  matrix, guidance, completed status, and verification evidence.
+- Exact diff, Python syntax, artifact, credential-pattern, conflict-marker,
+  mode, and whitespace audits passed before commit.
