@@ -1,6 +1,6 @@
 # Require Messenger Subscription Verification Mode
 
-Status: Planned
+Status: Completed
 
 ## Context
 
@@ -53,3 +53,28 @@ explicit subscription-verification request.
 
 All verification requests are synthetic. No Meta, Wit.ai, OpenWeather, or live
 credential interaction is performed.
+
+## Work Completed
+
+- Required exact `hub.mode=subscribe` before verify-token and challenge
+  processing.
+- Added Bottle/WebTest and dependency-free rejection coverage for missing,
+  differently cased, whitespace-padded, and non-text mode values.
+- Updated provider, security, roadmap, README, and change guidance plus the
+  completed-plan checker registration.
+
+## Verification Completed
+
+- Two focused Bottle/WebTest route tests passed in a fresh Python 3.12
+  environment with the repository's exact runtime and test pins.
+- The complete 31-test Bottle/WebTest suite passed in that environment.
+- Two focused dependency-free verification-mode contracts passed.
+- Repository and external-directory non-cleaning `make verify` are the full
+  gates for this change; both passed with 53 dependency-free contracts and 31
+  Bottle/WebTest tests. The broad-cleaning `make check` wrapper is not run
+  because workspace policy forbids broad generated-artifact deletion; its
+  verification payload is `make verify`.
+- Eight isolated mutations were rejected for removed or normalized mode
+  validation, token-before-mode ordering, successful invalid-mode status,
+  missing runtime coverage, missing checker registration, weakened guidance,
+  and reopened plan status.

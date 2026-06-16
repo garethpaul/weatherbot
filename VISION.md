@@ -21,6 +21,7 @@ Priority:
 - Reject blank Messenger message text before Wit action handling
 - Suppress retried Messenger message IDs before repeating Wit actions
 - Process Messenger message batches in order with a fixed per-webhook cap
+- Require exact Messenger subscription verification intent before challenges
 - Fail Messenger replies on provider HTTP errors so webhook retries remain
   recoverable
 - Isolate expected Wit failures per Messenger event to avoid batch retry

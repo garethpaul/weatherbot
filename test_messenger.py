@@ -66,11 +66,25 @@ class TestMessenger(unittest.TestCase):
     def test_facebook_verification_challenge_is_plain_text(self):
         response = test_app.get(
             '/webhook?hub.challenge=%3Cscript%3Ealert(1)%3C%2Fscript%3E'
-            '&hub.verify_token=test-verify-token')
+            '&hub.verify_token=test-verify-token&hub.mode=subscribe')
 
         self.assertEqual(response.status_int, 200)
         self.assertEqual(response.text, '<script>alert(1)</script>')
         self.assertEqual(response.content_type, 'text/plain')
+
+    def test_facebook_verification_requires_exact_subscribe_mode(self):
+        invalid_queries = [
+            'hub.verify_token=test-verify-token&hub.challenge=123',
+            'hub.mode=Subscribe&hub.verify_token=test-verify-token&hub.challenge=123',
+            'hub.mode=%20subscribe%20&hub.verify_token=test-verify-token&hub.challenge=123',
+        ]
+
+        for query in invalid_queries:
+            with self.subTest(query=query):
+                response = test_app.get('/webhook?' + query, expect_errors=True)
+                self.assertEqual(response.status_int, 400)
+                self.assertEqual(response.text, 'Invalid verification mode')
+                self.assertNotEqual(response.text, self.challenge)
 
     def test_facebook_delivery_event_is_ignored(self):
         """

@@ -2,6 +2,8 @@
 
 ## 2026-06-16
 
+- Required exact Messenger subscription verification mode before token and
+  challenge processing.
 - Verified support covers Python 3.10, 3.12, and 3.14 with Bottle 0.13.4, Requests 2.34.2, and WebTest 3.0.7 pinned exactly.
 - Replaced stale Wit response text with a stable retry-later message when a
   known-location OpenWeather lookup fails.

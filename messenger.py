@@ -101,6 +101,10 @@ def messenger_webhook():
     A webhook to return a challenge
     """
     response.content_type = 'text/plain; charset=UTF-8'
+    if request.query.get('hub.mode') != 'subscribe':
+        response.status = 400
+        return 'Invalid verification mode'
+
     verify_token = request.query.get('hub.verify_token')
     # check whether the verify tokens match
     if not secure_compare(verify_token, FB_VERIFY_TOKEN):

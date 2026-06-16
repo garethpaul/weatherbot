@@ -29,9 +29,10 @@ https://<public-host>/webhook
 
 Both Messenger operations use `/webhook`:
 
-- `GET /webhook` handles subscription verification. Meta supplies
-  `hub.verify_token` and `hub.challenge`; Weatherbot returns the challenge as
-  plain text only when the configured verify token matches.
+- `GET /webhook` handles subscription verification. Meta supplies the exact
+  `hub.mode=subscribe`, `hub.verify_token`, and `hub.challenge`; Weatherbot
+  returns the challenge as plain text only when the mode and configured verify
+  token match.
 - `POST /webhook` handles events. It requires `Content-Type: application/json`,
   a valid `X-Hub-Signature-256` generated with `FB_APP_SECRET`, a body no larger
   than 1 MiB, and a top-level Messenger object of `page`.
@@ -67,8 +68,9 @@ without a separate security review.
 Record the commit SHA, review date, reviewer, public callback hostname, provider
 names, and pass/fail status for these checks:
 
-- GET verification succeeds with the matching verify token and rejects a
-  mismatched token without echoing the challenge.
+- GET verification succeeds with exact subscription mode and the matching
+  verify token, and rejects a missing or malformed mode or mismatched token
+  without echoing the challenge.
 - Unsigned, incorrectly signed, non-JSON, oversized, and non-page POST requests
   are rejected before Wit actions.
 - A synthetic signed event passes the offline route suite without real user

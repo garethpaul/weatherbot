@@ -75,6 +75,9 @@ WEATHER_FAILURE_MESSAGE_PLAN_PATH = (
 VERSION_CONTRACT_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-16-python-dependency-version-contract.md"
 )
+MESSENGER_VERIFICATION_MODE_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-16-messenger-verification-mode.md"
+)
 
 
 class FakeBottle:
@@ -283,7 +286,7 @@ def test_messenger_verification_rejects_missing_configured_token():
     messenger, request, response, _requests, _calls = load_messenger()
 
     messenger.FB_VERIFY_TOKEN = None
-    request.query = {"hub.challenge": "challenge-1"}
+    request.query = {"hub.mode": "subscribe", "hub.challenge": "challenge-1"}
     response.status = 200
 
     body = messenger.messenger_webhook()
@@ -295,7 +298,11 @@ def test_messenger_verification_rejects_missing_configured_token():
 def test_messenger_verification_rejects_wrong_token():
     messenger, request, response, _requests, _calls = load_messenger()
 
-    request.query = {"hub.challenge": "challenge-1", "hub.verify_token": "wrong"}
+    request.query = {
+        "hub.mode": "subscribe",
+        "hub.challenge": "challenge-1",
+        "hub.verify_token": "wrong",
+    }
     response.status = 200
 
     body = messenger.messenger_webhook()
@@ -307,7 +314,11 @@ def test_messenger_verification_rejects_wrong_token():
 def test_messenger_verification_accepts_matching_token():
     messenger, request, response, _requests, _calls = load_messenger()
 
-    request.query = {"hub.challenge": "challenge-1", "hub.verify_token": "verify-token"}
+    request.query = {
+        "hub.mode": "subscribe",
+        "hub.challenge": "challenge-1",
+        "hub.verify_token": "verify-token",
+    }
     response.status = 200
 
     body = messenger.messenger_webhook()
@@ -320,13 +331,66 @@ def test_messenger_verification_accepts_matching_token():
 def test_messenger_verification_requires_challenge():
     messenger, request, response, _requests, _calls = load_messenger()
 
-    request.query = {"hub.verify_token": "verify-token"}
+    request.query = {"hub.mode": "subscribe", "hub.verify_token": "verify-token"}
     response.status = 200
 
     body = messenger.messenger_webhook()
 
     assert_equal(response.status, 400, "missing challenge status")
     assert_true(body != "challenge-1", "missing challenge must not echo challenge")
+
+
+def test_messenger_verification_rejects_invalid_modes():
+    messenger, request, response, _requests, _calls = load_messenger()
+
+    for mode in (None, "Subscribe", " subscribe ", ["subscribe"]):
+        request.query = {
+            "hub.verify_token": "verify-token",
+            "hub.challenge": "challenge-1",
+        }
+        if mode is not None:
+            request.query["hub.mode"] = mode
+        response.status = 200
+
+        body = messenger.messenger_webhook()
+
+        assert_equal(response.status, 400, "invalid verification mode status {0!r}".format(mode))
+        assert_equal(body, "Invalid verification mode", "invalid verification mode body {0!r}".format(mode))
+        assert_true(body != "challenge-1", "invalid verification mode must not echo challenge")
+
+
+def test_messenger_verification_mode_source_contracts():
+    source = (ROOT / "messenger.py").read_text(encoding="utf-8")
+    webhook_source = source.split("@app.get('/webhook')", 1)[1].split("def secure_compare", 1)[0]
+    runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
+    for contract in (
+        "if request.query.get('hub.mode') != 'subscribe':",
+        "response.status = 400",
+        "return 'Invalid verification mode'",
+    ):
+        assert_true(contract in webhook_source, "missing Messenger verification-mode contract {0}".format(contract))
+
+    mode_guard = webhook_source.index("if request.query.get('hub.mode') != 'subscribe':")
+    token_read = webhook_source.index("verify_token = request.query.get('hub.verify_token')")
+    challenge_read = webhook_source.index("challenge = request.query.get('hub.challenge')")
+    assert_true(mode_guard < token_read < challenge_read, "Messenger verification mode must be checked before token and challenge processing")
+    assert_true(
+        "test_facebook_verification_requires_exact_subscribe_mode" in runtime_tests,
+        "runtime coverage must reject invalid Messenger verification modes",
+    )
+
+    docs = {
+        "README.md": "requires the exact `subscribe` verification mode",
+        "PROVIDER_SETUP.md": "`hub.mode=subscribe`",
+        "SECURITY.md": "exact Messenger subscription verification mode",
+        "VISION.md": "Require exact Messenger subscription verification intent",
+        "CHANGES.md": "Required exact Messenger subscription verification mode",
+    }
+    for relative_path, phrase in docs.items():
+        assert_true(
+            phrase in (ROOT / relative_path).read_text(encoding="utf-8"),
+            "{0} must document Messenger verification mode".format(relative_path),
+        )
 
 
 def test_messenger_post_ignores_non_message_events():
@@ -1135,6 +1199,7 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(MESSENGER_REPLY_HTTP_STATUS_PLAN_PATH, "weatherbot Messenger reply HTTP status")
     assert_completed_plan(WEATHER_FAILURE_MESSAGE_PLAN_PATH, "weatherbot weather failure user message")
     assert_completed_plan(VERSION_CONTRACT_PLAN_PATH, "weatherbot Python and dependency versions")
+    assert_completed_plan(MESSENGER_VERIFICATION_MODE_PLAN_PATH, "weatherbot Messenger verification mode")
     checker_main = Path(__file__).read_text().rsplit("def main():", 1)[1]
     assert_true(
         "test_provider_setup_guide_is_auditable," in checker_main,
@@ -1143,6 +1208,10 @@ def test_completed_plans_are_in_docs_plans():
     assert_true(
         "test_supported_version_guidance," in checker_main,
         "supported version guidance contract must run in the main suite",
+    )
+    assert_true(
+        "test_messenger_verification_mode_source_contracts," in checker_main,
+        "Messenger verification-mode contract must run in the main suite",
     )
 
 
@@ -1345,6 +1414,8 @@ def main():
         test_messenger_verification_rejects_wrong_token,
         test_messenger_verification_accepts_matching_token,
         test_messenger_verification_requires_challenge,
+        test_messenger_verification_rejects_invalid_modes,
+        test_messenger_verification_mode_source_contracts,
         test_messenger_post_ignores_non_message_events,
         test_messenger_post_ignores_echoes_and_continues_batch,
         test_messenger_post_ignores_malformed_nested_events_and_continues_batch,

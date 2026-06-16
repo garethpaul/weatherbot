@@ -63,6 +63,10 @@ Messenger webhook payloads should only invoke Wit actions when both the sender
 ID and message text are textual and nonblank. Malformed sender IDs should be
 acknowledged without creating a Wit session.
 
+GET challenges require the exact Messenger subscription verification mode
+before token and challenge processing; malformed intent must fail without
+echoing caller-controlled challenge text.
+
 Expected Wit transport and response failures are isolated to the affected
 event so they do not force retries of an authenticated Messenger batch after
 earlier replies may have been sent. Public errors and logs must not include

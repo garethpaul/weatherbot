@@ -72,6 +72,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
 - `WIT_TOKEN` configures Wit.ai access.
 - `FB_PAGE_TOKEN` configures Facebook Messenger replies.
 - `FB_VERIFY_TOKEN` configures Messenger webhook verification.
+- Messenger GET verification requires the exact `subscribe` verification mode
+  before the configured token and challenge are accepted.
 - `FB_APP_SECRET` validates `X-Hub-Signature-256` on Messenger POST payloads.
 - Messenger POST bodies are limited to 1 MiB before signature verification.
 - Expected Wit transport and response failures are isolated to the affected
