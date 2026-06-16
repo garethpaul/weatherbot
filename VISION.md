@@ -26,6 +26,8 @@ Priority:
   recoverable
 - Isolate expected Wit failures per Messenger event to avoid batch retry
   amplification after earlier replies
+- Preserve normalized Unicode Wit replies through Messenger JSON serialization
+- Reject missing, non-text, or blank Wit reply text with a stable error
 - Make weather lookup and response flow easy to trace
 - Treat malformed Wit entities as missing user location
 - Normalize flat and nested Wit location values before weather lookup

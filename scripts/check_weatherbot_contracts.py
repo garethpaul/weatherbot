@@ -4,6 +4,7 @@ import importlib.util
 import hashlib
 import hmac
 import io
+import json
 import os
 import sys
 import types
@@ -77,6 +78,9 @@ VERSION_CONTRACT_PLAN_PATH = (
 )
 MESSENGER_VERIFICATION_MODE_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-16-messenger-verification-mode.md"
+)
+WIT_REPLY_TEXT_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-16-wit-reply-text-normalization.md"
 )
 
 
@@ -1030,6 +1034,74 @@ def test_wit_requests_use_timeout():
     assert_equal(kwargs.get("timeout"), 5, "wit request timeout")
 
 
+def test_wit_message_replies_remain_json_serializable_unicode():
+    load_messenger()
+    wit = sys.modules["wit"]
+    sent = []
+    responses = iter([
+        {"type": "msg", "msg": "  Prévisions prêtes  "},
+        {"type": "stop"},
+    ])
+    client = wit.Wit(
+        "wit-token",
+        actions={"send": lambda request, response: sent.append(response["text"])},
+    )
+    client.converse = lambda *_args, **_kwargs: next(responses)
+
+    client.run_actions("user-1", "weather")
+
+    assert_equal(sent, ["Prévisions prêtes"], "normalized Wit reply text")
+    assert_true(isinstance(sent[0], str), "Wit reply text must remain Unicode")
+    assert_equal(
+        json.loads(json.dumps({"text": sent[0]})),
+        {"text": "Prévisions prêtes"},
+        "Wit reply text JSON round trip",
+    )
+
+
+def test_wit_message_replies_reject_invalid_text():
+    load_messenger()
+    wit = sys.modules["wit"]
+    for invalid_text in (None, b"bytes", 42, "   "):
+        sent = []
+        client = wit.Wit(
+            "wit-token",
+            actions={"send": lambda request, response: sent.append(response)},
+        )
+        client.converse = lambda *_args, **_kwargs: {
+            "type": "msg",
+            "msg": invalid_text,
+        }
+        try:
+            client.run_actions("user-1", "weather")
+        except wit.WitError as error:
+            assert_equal(str(error), "Wit response was invalid.", "invalid Wit reply error")
+        else:
+            raise AssertionError("invalid Wit reply must raise WitError: {0!r}".format(invalid_text))
+        assert_equal(sent, [], "invalid Wit reply send calls")
+
+    source = (ROOT / "wit.py").read_text(encoding="utf-8")
+    runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
+    assert_true("def normalized_message_text(value):" in source, "Wit replies must be normalized")
+    assert_true("json.get('msg').encode('utf8')" not in source, "Wit replies must not become bytes")
+    assert_true(
+        "test_wit_message_reply_remains_json_serializable_unicode" in runtime_tests,
+        "runtime tests must cover Unicode Wit replies",
+    )
+    documents = {
+        "README.md": "normalized Unicode text through Messenger JSON serialization",
+        "SECURITY.md": "normalized Unicode text before Messenger JSON serialization",
+        "VISION.md": "normalized Unicode Wit replies through Messenger JSON serialization",
+        "CHANGES.md": "normalized Unicode Wit replies through Messenger JSON serialization",
+    }
+    for relative_path, phrase in documents.items():
+        document = " ".join((ROOT / relative_path).read_text(encoding="utf-8").split())
+        assert_true(
+            phrase in document,
+            relative_path + " must document Wit reply text normalization",
+        )
+
+
 def test_wit_debug_logs_avoid_message_payloads():
     source = (ROOT / "wit.py").read_text()
     assert_true(
@@ -1200,6 +1272,7 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(WEATHER_FAILURE_MESSAGE_PLAN_PATH, "weatherbot weather failure user message")
     assert_completed_plan(VERSION_CONTRACT_PLAN_PATH, "weatherbot Python and dependency versions")
     assert_completed_plan(MESSENGER_VERIFICATION_MODE_PLAN_PATH, "weatherbot Messenger verification mode")
+    assert_completed_plan(WIT_REPLY_TEXT_PLAN_PATH, "weatherbot Wit reply text normalization")
     checker_main = Path(__file__).read_text().rsplit("def main():", 1)[1]
     assert_true(
         "test_provider_setup_guide_is_auditable," in checker_main,
@@ -1212,6 +1285,11 @@ def test_completed_plans_are_in_docs_plans():
     assert_true(
         "test_messenger_verification_mode_source_contracts," in checker_main,
         "Messenger verification-mode contract must run in the main suite",
+    )
+    assert_true(
+        "test_wit_message_replies_remain_json_serializable_unicode," in checker_main
+        and "test_wit_message_replies_reject_invalid_text," in checker_main,
+        "Wit reply text contracts must run in the main suite",
     )
 
 
@@ -1447,6 +1525,8 @@ def main():
         test_bottle_debug_is_disabled_by_default,
         test_bottle_debug_requires_truthy_env_flag,
         test_wit_requests_use_timeout,
+        test_wit_message_replies_remain_json_serializable_unicode,
+        test_wit_message_replies_reject_invalid_text,
         test_wit_debug_logs_avoid_message_payloads,
         test_wit_failures_use_stable_public_errors,
         test_first_entity_value_handles_malformed_entities,

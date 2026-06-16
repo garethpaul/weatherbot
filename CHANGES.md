@@ -2,6 +2,8 @@
 
 ## 2026-06-16
 
+- Preserved normalized Unicode Wit replies through Messenger JSON serialization
+  and rejected missing, non-text, or blank reply values with a stable error.
 - Required exact Messenger subscription verification mode before token and
   challenge processing.
 - Verified support covers Python 3.10, 3.12, and 3.14 with Bottle 0.13.4, Requests 2.34.2, and WebTest 3.0.7 pinned exactly.

@@ -29,6 +29,16 @@ class WitError(Exception):
     pass
 
 
+def normalized_message_text(value):
+    if not isinstance(value, str):
+        raise WitError('Wit response was invalid.')
+
+    value = value.strip()
+    if not value:
+        raise WitError('Wit response was invalid.')
+    return value
+
+
 def req(logger, access_token, meth, path, params, **kwargs):
     full_url = WIT_API_HOST + path
     logger.debug('%s %s request', meth, full_url)
@@ -141,7 +151,7 @@ class Wit:
         if json['type'] == 'msg':
             self.throw_if_action_missing('send')
             response = {
-                'text': json.get('msg').encode('utf8'),
+                'text': normalized_message_text(json.get('msg')),
                 'quickreplies': json.get('quickreplies'),
             }
             self.actions['send'](request, response)

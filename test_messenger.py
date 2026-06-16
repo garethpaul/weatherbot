@@ -444,6 +444,45 @@ class TestMessenger(unittest.TestCase):
 
         self.assertEqual(str(raised.exception), 'Wit responded with an error.')
 
+    def test_wit_message_reply_remains_json_serializable_unicode(self):
+        sent = []
+        responses = iter([
+            {'type': 'msg', 'msg': '  Prévisions prêtes  '},
+            {'type': 'stop'},
+        ])
+        client = wit.Wit(
+            'test-token',
+            actions={'send': lambda request, response: sent.append(response['text'])},
+        )
+        client.converse = lambda *_args, **_kwargs: next(responses)
+
+        client.run_actions(self.user_id, 'weather')
+
+        self.assertEqual(sent, ['Prévisions prêtes'])
+        self.assertIsInstance(sent[0], str)
+        self.assertEqual(
+            json.loads(json.dumps({'text': sent[0]})),
+            {'text': 'Prévisions prêtes'},
+        )
+
+    def test_wit_message_reply_rejects_invalid_text(self):
+        for invalid_text in (None, b'bytes', 42, '   '):
+            with self.subTest(invalid_text=invalid_text):
+                sent = []
+                client = wit.Wit(
+                    'test-token',
+                    actions={'send': lambda request, response: sent.append(response)},
+                )
+                client.converse = lambda *_args, **_kwargs: {
+                    'type': 'msg',
+                    'msg': invalid_text,
+                }
+
+                with self.assertRaisesRegex(wit.WitError, 'Wit response was invalid'):
+                    client.run_actions(self.user_id, 'weather')
+
+                self.assertEqual(sent, [])
+
     def test_facebook_response(self):
         """
         A test to send a FB message test

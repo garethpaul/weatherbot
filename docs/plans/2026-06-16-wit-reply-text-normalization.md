@@ -1,6 +1,6 @@
 # Wit Reply Text Normalization
 
-## Status: Planned
+## Status: Completed
 
 ## Priority
 
@@ -65,4 +65,14 @@ therefore do not cover the actual Wit-to-Messenger boundary.
 
 ## Verification Completed
 
-Pending implementation and bounded verification.
+- The pre-fix action-loop reproduction produced `bytes` and Python's JSON
+  encoder raised `TypeError: Object of type bytes is not JSON serializable`.
+- Focused executable and dependency-free Wit reply tests passed for Unicode,
+  missing, bytes, numeric, and blank reply values.
+- Seven hostile Wit reply mutations were rejected across production
+  normalization, validation, executable/portable coverage, guidance, and plan
+  status.
+- Repository and external-directory `make check` passed in an isolated Python
+  3.12 environment with the exact runtime and test dependency pins.
+- Exact-path diff, generated-artifact, secret, conflict-marker, mode, binary,
+  large-file, and whitespace audits passed before commit.
