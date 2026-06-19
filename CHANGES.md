@@ -2,6 +2,8 @@
 
 ## 2026-06-19
 
+- Added anti-sniff and restrictive content-security headers to the exact
+  plain-text Messenger verification challenge response.
 - Rejected non-ASCII Messenger verification tokens with HTTP 403 instead of
   raising from constant-time comparison.
 - Counted only newly claimed Messenger messages toward the 20-message webhook

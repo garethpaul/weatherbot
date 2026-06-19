@@ -109,6 +109,10 @@ class MutableResponse:
     def __init__(self):
         self.status = 200
         self.content_type = None
+        self.headers = {}
+
+    def set_header(self, name, value):
+        self.headers[name] = value
 
 
 class FakeHTTPResponse:
@@ -349,6 +353,16 @@ def test_messenger_verification_accepts_matching_token():
     assert_equal(body, "challenge-1", "matching verify token challenge")
     assert_equal(response.status, 200, "matching verify token status")
     assert_equal(response.content_type, "text/plain; charset=UTF-8", "verification challenge content type")
+    assert_equal(
+        response.headers.get("X-Content-Type-Options"),
+        "nosniff",
+        "verification challenge anti-sniff header",
+    )
+    assert_equal(
+        response.headers.get("Content-Security-Policy"),
+        "default-src 'none'; sandbox",
+        "verification challenge content security policy",
+    )
 
 
 def test_messenger_verification_requires_challenge():
@@ -390,6 +404,8 @@ def test_messenger_verification_mode_source_contracts():
         "if request.query.get('hub.mode') != 'subscribe':",
         "response.status = 400",
         "return 'Invalid verification mode'",
+        "response.set_header('X-Content-Type-Options', 'nosniff')",
+        "'Content-Security-Policy', \"default-src 'none'; sandbox\"",
     ):
         assert_true(contract in webhook_source, "missing Messenger verification-mode contract {0}".format(contract))
 

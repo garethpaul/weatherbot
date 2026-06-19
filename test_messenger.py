@@ -71,6 +71,10 @@ class TestMessenger(unittest.TestCase):
         self.assertEqual(response.status_int, 200)
         self.assertEqual(response.text, '<script>alert(1)</script>')
         self.assertEqual(response.content_type, 'text/plain')
+        self.assertEqual(response.headers['X-Content-Type-Options'], 'nosniff')
+        self.assertEqual(
+            response.headers['Content-Security-Policy'],
+            "default-src 'none'; sandbox")
 
     def test_facebook_verification_requires_exact_subscribe_mode(self):
         invalid_queries = [
