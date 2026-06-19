@@ -38,6 +38,8 @@ class TestMessenger(unittest.TestCase):
         self.user_id = '1305664346125260'
         self.challenge = '123'
         self.location = 'Yountville'
+        messenger.recent_messenger_message_ids = messenger.RecentMessageIds(
+            messenger.MAX_RECENT_MESSENGER_MESSAGE_IDS)
 
     def test_facebook_webhook(self):
         """
@@ -61,6 +63,38 @@ class TestMessenger(unittest.TestCase):
         self.assertEqual(r.status_int, 200)
         self.assertEqual(fake_client.calls, [(self.user_id, 'hey')])
 
+    def test_facebook_verification_challenge_is_plain_text(self):
+        response = test_app.get(
+            '/webhook?hub.challenge=%3Cscript%3Ealert(1)%3C%2Fscript%3E'
+            '&hub.verify_token=test-verify-token&hub.mode=subscribe')
+
+        self.assertEqual(response.status_int, 200)
+        self.assertEqual(response.text, '<script>alert(1)</script>')
+        self.assertEqual(response.content_type, 'text/plain')
+
+    def test_facebook_verification_requires_exact_subscribe_mode(self):
+        invalid_queries = [
+            'hub.verify_token=test-verify-token&hub.challenge=123',
+            'hub.mode=Subscribe&hub.verify_token=test-verify-token&hub.challenge=123',
+            'hub.mode=%20subscribe%20&hub.verify_token=test-verify-token&hub.challenge=123',
+        ]
+
+        for query in invalid_queries:
+            with self.subTest(query=query):
+                response = test_app.get('/webhook?' + query, expect_errors=True)
+                self.assertEqual(response.status_int, 400)
+                self.assertEqual(response.text, 'Invalid verification mode')
+                self.assertNotEqual(response.text, self.challenge)
+
+    def test_facebook_verification_rejects_non_ascii_token(self):
+        response = test_app.get(
+            '/webhook?hub.mode=subscribe&hub.verify_token=%E2%98%83'
+            '&hub.challenge=123',
+            expect_errors=True)
+
+        self.assertEqual(response.status_int, 403)
+        self.assertEqual(response.text, 'Invalid Request or Verification Token')
+
     def test_facebook_delivery_event_is_ignored(self):
         """
         Delivery events should be acknowledged without calling Wit.
@@ -71,6 +105,227 @@ class TestMessenger(unittest.TestCase):
         r = self.post_signed_json(data)
         self.assertEqual(r.status_int, 200)
         self.assertEqual(r.text, 'ok')
+
+    def test_facebook_echo_is_ignored_before_later_user_message(self):
+        data = {'object': 'page',
+                'entry': [{'messaging': [
+                    {'sender': {'id': 'page-1'},
+                     'message': {'text': 'page reply', 'is_echo': True}},
+                    {'sender': {'id': 'user-2'},
+                     'message': {'text': 'weather in Yountville'}},
+                ]}]}
+
+        class FakeClient(object):
+            def __init__(self):
+                self.calls = []
+
+            def run_actions(self, session_id, message):
+                self.calls.append((session_id, message))
+
+        original_client = messenger.client
+        fake_client = FakeClient()
+        messenger.client = fake_client
+        try:
+            response = self.post_signed_json(data)
+        finally:
+            messenger.client = original_client
+
+        self.assertEqual(response.status_int, 200)
+        self.assertEqual(fake_client.calls, [
+            ('user-2', 'weather in Yountville'),
+        ])
+
+    def test_facebook_malformed_nested_events_do_not_hide_later_messages(self):
+        data = {'object': 'page',
+                'entry': [{'messaging': [
+                    {'sender': ['malformed'], 'message': {'text': 'ignored'}},
+                    {'sender': {'id': 'ignored'}, 'message': ['malformed']},
+                    {'sender': {'id': 'user-2'},
+                     'message': {'text': 'weather in Yountville'}},
+                ]}]}
+        calls = []
+        original_client = messenger.client
+        messenger.client = mock.Mock(
+            run_actions=lambda session_id, message: calls.append((session_id, message)))
+        try:
+            response = self.post_signed_json(data)
+        finally:
+            messenger.client = original_client
+
+        self.assertEqual(response.status_int, 200)
+        self.assertEqual(calls, [('user-2', 'weather in Yountville')])
+
+    def test_facebook_caps_valid_message_batch(self):
+        events = [
+            {'sender': {'id': 'user-{0}'.format(index)},
+             'message': {'mid': 'batch-{0}'.format(index),
+                         'text': 'weather-{0}'.format(index)}}
+            for index in range(messenger.MAX_MESSENGER_MESSAGES_PER_WEBHOOK + 1)
+        ]
+        calls = []
+        original_client = messenger.client
+        messenger.client = mock.Mock(
+            run_actions=lambda session_id, message: calls.append((session_id, message)))
+        try:
+            response = self.post_signed_json(
+                {'object': 'page', 'entry': [{'messaging': events}]})
+        finally:
+            messenger.client = original_client
+
+        self.assertEqual(response.status_int, 200)
+        self.assertEqual(len(calls), messenger.MAX_MESSENGER_MESSAGES_PER_WEBHOOK)
+        self.assertEqual(calls[0], ('user-0', 'weather-0'))
+        self.assertEqual(calls[-1], ('user-19', 'weather-19'))
+
+    def test_facebook_replayed_message_id_runs_actions_once(self):
+        class FakeClient(object):
+            def __init__(self):
+                self.calls = []
+
+            def run_actions(self, session_id, message):
+                self.calls.append((session_id, message))
+
+        original_client = messenger.client
+        fake_client = FakeClient()
+        messenger.client = fake_client
+        try:
+            first = self.post_signed_json(self.data)
+            replay = self.post_signed_json(self.data)
+        finally:
+            messenger.client = original_client
+
+        self.assertEqual(first.status_int, 200)
+        self.assertEqual(replay.status_int, 200)
+        self.assertEqual(fake_client.calls, [(self.user_id, 'hey')])
+
+    def test_facebook_duplicate_batch_item_does_not_block_later_message(self):
+        data = {'object': 'page',
+                'entry': [{'messaging': [
+                    {'sender': {'id': 'user-1'},
+                     'message': {'mid': 'mid-1', 'text': 'first'}},
+                    {'sender': {'id': 'user-1'},
+                     'message': {'mid': 'mid-1', 'text': 'first'}},
+                    {'sender': {'id': 'user-2'},
+                     'message': {'mid': 'mid-2', 'text': 'second'}},
+                ]}]}
+
+        calls = []
+        original_client = messenger.client
+        messenger.client = mock.Mock(
+            run_actions=lambda session_id, message: calls.append((session_id, message)))
+        try:
+            response = self.post_signed_json(data)
+        finally:
+            messenger.client = original_client
+
+        self.assertEqual(response.status_int, 200)
+        self.assertEqual(calls, [('user-1', 'first'), ('user-2', 'second')])
+
+    def test_facebook_duplicate_ids_do_not_exhaust_batch_limit(self):
+        duplicate_events = [
+            {'sender': {'id': 'user-1'},
+             'message': {'mid': 'mid-1', 'text': 'first'}}
+            for _index in range(messenger.MAX_MESSENGER_MESSAGES_PER_WEBHOOK)
+        ]
+        data = {'object': 'page',
+                'entry': [{'messaging': duplicate_events + [
+                    {'sender': {'id': 'user-2'},
+                     'message': {'mid': 'mid-2', 'text': 'second'}},
+                ]}]}
+
+        calls = []
+        original_client = messenger.client
+        messenger.client = mock.Mock(
+            run_actions=lambda session_id, message: calls.append((session_id, message)))
+        try:
+            response = self.post_signed_json(data)
+        finally:
+            messenger.client = original_client
+
+        self.assertEqual(response.status_int, 200)
+        self.assertEqual(calls, [('user-1', 'first'), ('user-2', 'second')])
+
+    def test_facebook_wit_failure_releases_message_claim_for_retry(self):
+        calls = []
+
+        def run_actions(session_id, message):
+            calls.append((session_id, message))
+            if len(calls) == 1:
+                raise messenger.WitError('Wit request failed.')
+
+        original_client = messenger.client
+        messenger.client = mock.Mock(run_actions=run_actions)
+        try:
+            first = self.post_signed_json(self.data)
+            retry = self.post_signed_json(self.data)
+        finally:
+            messenger.client = original_client
+
+        self.assertEqual(first.status_int, 200)
+        self.assertEqual(retry.status_int, 200)
+        self.assertEqual(calls, [(self.user_id, 'hey'), (self.user_id, 'hey')])
+
+    def test_facebook_unexpected_failure_releases_message_claim_for_retry(self):
+        calls = []
+
+        def run_actions(session_id, message):
+            calls.append((session_id, message))
+            if len(calls) == 1:
+                raise RuntimeError('programming error')
+
+        original_client = messenger.client
+        messenger.client = mock.Mock(run_actions=run_actions)
+        try:
+            failed = self.post_signed_json(self.data, expect_errors=True)
+            retry = self.post_signed_json(self.data)
+        finally:
+            messenger.client = original_client
+
+        self.assertEqual(failed.status_int, 500)
+        self.assertEqual(retry.status_int, 200)
+        self.assertEqual(calls, [(self.user_id, 'hey'), (self.user_id, 'hey')])
+
+    def test_facebook_messages_without_ids_preserve_compatibility(self):
+        data = {'object': 'page',
+                'entry': [{'messaging': [{'sender': {'id': 'user-1'},
+                                          'message': {'text': 'weather'}}]}]}
+        calls = []
+        original_client = messenger.client
+        messenger.client = mock.Mock(
+            run_actions=lambda session_id, message: calls.append((session_id, message)))
+        try:
+            self.post_signed_json(data)
+            self.post_signed_json(data)
+        finally:
+            messenger.client = original_client
+
+        self.assertEqual(calls, [('user-1', 'weather'), ('user-1', 'weather')])
+
+    def test_facebook_malformed_message_ids_preserve_compatibility(self):
+        data = {'object': 'page',
+                'entry': [{'messaging': [{'sender': {'id': 'user-1'},
+                                          'message': {'mid': {'bad': 'id'},
+                                                      'text': 'weather'}}]}]}
+        calls = []
+        original_client = messenger.client
+        messenger.client = mock.Mock(
+            run_actions=lambda session_id, message: calls.append((session_id, message)))
+        try:
+            self.post_signed_json(data)
+            self.post_signed_json(data)
+        finally:
+            messenger.client = original_client
+
+        self.assertEqual(calls, [('user-1', 'weather'), ('user-1', 'weather')])
+
+    def test_recent_message_ids_evict_oldest_claim_at_bound(self):
+        recent = messenger.RecentMessageIds(2)
+
+        self.assertTrue(recent.claim('mid-1'))
+        self.assertTrue(recent.claim('mid-2'))
+        self.assertTrue(recent.claim('mid-3'))
+        self.assertFalse(recent.claim('mid-3'))
+        self.assertTrue(recent.claim('mid-1'))
 
     def test_facebook_wit_failure_does_not_block_later_messages(self):
         data = {'object': 'page',
@@ -126,7 +381,25 @@ class TestMessenger(unittest.TestCase):
         r = test_app.post('/webhook', '', content_type='text/plain',
                           headers={'X-Hub-Signature-256': 'sha256=invalid'},
                           expect_errors=True)
-        self.assertEqual(r.status_int, 403)
+        self.assertEqual(r.status_int, 415)
+
+    def test_facebook_accepts_json_content_type_parameters(self):
+        response = self.post_signed_json(
+            self.data,
+            content_type='Application/JSON; charset=UTF-8')
+        self.assertEqual(response.status_int, 200)
+
+    def test_facebook_rejects_json_prefix_spoof(self):
+        body = json.dumps(self.data).encode('utf-8')
+        signature = 'sha256=' + hmac.new(
+            messenger.FB_APP_SECRET.encode('utf-8'),
+            body,
+            hashlib.sha256).hexdigest()
+        response = test_app.post(
+            '/webhook', body, content_type='application/jsonp',
+            headers={'X-Hub-Signature-256': signature},
+            expect_errors=True)
+        self.assertEqual(response.status_int, 415)
 
     def test_facebook_invalid_signature(self):
         body = json.dumps(self.data).encode('utf-8')
@@ -148,13 +421,14 @@ class TestMessenger(unittest.TestCase):
                           expect_errors=True)
         self.assertEqual(r.status_int, 413)
 
-    def post_signed_json(self, payload, expect_errors=False):
+    def post_signed_json(self, payload, expect_errors=False,
+                         content_type='application/json'):
         body = json.dumps(payload).encode('utf-8')
         signature = 'sha256=' + hmac.new(
             messenger.FB_APP_SECRET.encode('utf-8'),
             body,
             hashlib.sha256).hexdigest()
-        return test_app.post('/webhook', body, content_type='application/json',
+        return test_app.post('/webhook', body, content_type=content_type,
                              headers={'X-Hub-Signature-256': signature},
                              expect_errors=expect_errors)
 
@@ -191,6 +465,26 @@ class TestMessenger(unittest.TestCase):
 
         self.assertEqual(str(raised.exception), 'Wit response was invalid.')
 
+    def test_wit_rejects_every_non_200_status_without_reason_dependency(self):
+        for status_code in (199, 201, 503):
+            with self.subTest(status_code=status_code):
+                fake_response = mock.Mock(status_code=status_code, reason=None)
+
+                with mock.patch.object(
+                        wit.requests, 'request', return_value=fake_response):
+                    with self.assertRaises(wit.WitError) as raised:
+                        wit.req(
+                            logging.getLogger('test'),
+                            'secret-token',
+                            'GET',
+                            '/message',
+                            {})
+
+                self.assertEqual(
+                    str(raised.exception),
+                    'Wit responded with status: {0}.'.format(status_code))
+                fake_response.json.assert_not_called()
+
     def test_wit_provider_error_does_not_expose_response_details(self):
         fake_response = mock.Mock(status_code=200)
         fake_response.json.return_value = {
@@ -203,6 +497,45 @@ class TestMessenger(unittest.TestCase):
 
         self.assertEqual(str(raised.exception), 'Wit responded with an error.')
 
+    def test_wit_message_reply_remains_json_serializable_unicode(self):
+        sent = []
+        responses = iter([
+            {'type': 'msg', 'msg': '  Prévisions prêtes  '},
+            {'type': 'stop'},
+        ])
+        client = wit.Wit(
+            'test-token',
+            actions={'send': lambda request, response: sent.append(response['text'])},
+        )
+        client.converse = lambda *_args, **_kwargs: next(responses)
+
+        client.run_actions(self.user_id, 'weather')
+
+        self.assertEqual(sent, ['Prévisions prêtes'])
+        self.assertIsInstance(sent[0], str)
+        self.assertEqual(
+            json.loads(json.dumps({'text': sent[0]})),
+            {'text': 'Prévisions prêtes'},
+        )
+
+    def test_wit_message_reply_rejects_invalid_text(self):
+        for invalid_text in (None, b'bytes', 42, '   '):
+            with self.subTest(invalid_text=invalid_text):
+                sent = []
+                client = wit.Wit(
+                    'test-token',
+                    actions={'send': lambda request, response: sent.append(response)},
+                )
+                client.converse = lambda *_args, **_kwargs: {
+                    'type': 'msg',
+                    'msg': invalid_text,
+                }
+
+                with self.assertRaisesRegex(wit.WitError, 'Wit response was invalid'):
+                    client.run_actions(self.user_id, 'weather')
+
+                self.assertEqual(sent, [])
+
     def test_facebook_response(self):
         """
         A test to send a FB message test
@@ -213,6 +546,9 @@ class TestMessenger(unittest.TestCase):
         class FakeResponse(object):
             def __init__(self, user_id):
                 self.content = json.dumps({'recipient_id': user_id})
+
+            def raise_for_status(self):
+                return None
 
         def fake_post(url, **kwargs):
             calls.append((url, kwargs))
@@ -230,6 +566,57 @@ class TestMessenger(unittest.TestCase):
         self.assertEqual(calls[0][1]['headers']['Authorization'],
                          'Bearer ' + messenger.FB_PAGE_TOKEN)
         self.assertEqual(calls[0][1]['timeout'], messenger.REQUEST_TIMEOUT)
+
+    def test_facebook_response_raises_for_http_error(self):
+        original_post = messenger.requests.post
+
+        class FailedResponse(object):
+            content = b'provider error'
+
+            def raise_for_status(self):
+                raise RuntimeError('provider rejected reply')
+
+        messenger.requests.post = lambda _url, **_kwargs: FailedResponse()
+        try:
+            with self.assertRaisesRegex(RuntimeError, 'provider rejected reply'):
+                messenger.fb_message(self.user_id, 'hello this is a test')
+        finally:
+            messenger.requests.post = original_post
+
+    def test_send_uses_stable_text_for_missing_forecast(self):
+        with mock.patch.object(messenger, 'fb_message') as fb_message:
+            messenger.send(
+                {'session_id': self.user_id,
+                 'context': {'missingForecast': True}},
+                {})
+
+        fb_message.assert_called_once_with(
+            self.user_id,
+            "I couldn't get the weather right now. Please try again.")
+
+    def test_send_preserves_wit_text_without_exact_missing_forecast(self):
+        contexts = [
+            {},
+            {'missingLocation': True},
+            {'missingForecast': False},
+            {'missingForecast': 1},
+            None,
+            [],
+        ]
+
+        with mock.patch.object(messenger, 'fb_message') as fb_message:
+            for context in contexts:
+                request = {'session_id': self.user_id, 'context': context}
+                messenger.send(request, {'text': 'Which location should I check?'})
+                fb_message.assert_called_once_with(
+                    self.user_id, 'Which location should I check?')
+                fb_message.reset_mock()
+
+            messenger.send(
+                {'session_id': self.user_id},
+                {'text': 'Which location should I check?'})
+            fb_message.assert_called_once_with(
+                self.user_id, 'Which location should I check?')
 
     def test_weather(self):
         original_get = messenger.requests.get
@@ -256,6 +643,15 @@ class TestMessenger(unittest.TestCase):
         self.assertTrue(len(weather) >= 1)
         self.assertEqual(calls[0][1]['params']['q'], self.location)
         self.assertEqual(calls[0][1]['timeout'], messenger.REQUEST_TIMEOUT)
+
+    def test_weather_rejects_non_text_condition(self):
+        fake_response = mock.Mock()
+        fake_response.json.return_value = {
+            'weather': [{'main': {'unexpected': 'shape'}}],
+        }
+
+        with mock.patch.object(messenger.requests, 'get', return_value=fake_response):
+            self.assertIsNone(messenger.get_weather(self.location))
 
     def test_wit_entity_values_are_normalized(self):
         malformed_values = [

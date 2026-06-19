@@ -1,7 +1,57 @@
 # Changes
 
+## 2026-06-19
+
+- Rejected non-ASCII Messenger verification tokens with HTTP 403 instead of
+  raising from constant-time comparison.
+- Counted only newly claimed Messenger messages toward the 20-message webhook
+  processing limit so replayed IDs cannot starve later unique events.
+- Rejected non-text OpenWeather condition values instead of stringifying
+  malformed provider objects into user-facing forecasts.
+- Rejected every non-200 Wit response with a stable status error that does not
+  depend on an optional HTTP reason phrase.
+
+## 2026-06-16
+
+- Preserved normalized Unicode Wit replies through Messenger JSON serialization
+  and rejected missing, non-text, or blank reply values with a stable error.
+- Required exact Messenger subscription verification mode before token and
+  challenge processing.
+- Verified support covers Python 3.10, 3.12, and 3.14 with Bottle 0.13.4, Requests 2.34.2, and WebTest 3.0.7 pinned exactly.
+- Replaced stale Wit response text with a stable retry-later message when a
+  known-location OpenWeather lookup fails.
+- Preserved normal Wit replies for successful forecasts, missing-location
+  prompts, absent context, and malformed non-boolean failure state.
+
+## 2026-06-15
+
+- Rejected unsuccessful Messenger provider responses before accepting reply
+  content, allowing failed message-ID claims to be retried.
+
+## 2026-06-14
+
+- Added a secret-safe provider setup guide covering all five required
+  credentials, the shared HTTPS Messenger webhook, optional settings, setup
+  order, and redacted verification evidence.
+
+## 2026-06-13
+
+- Capped each signed Messenger webhook at 20 valid Wit action messages while
+  preserving payload order and per-message replay handling.
+- Ignored malformed nested sender and message values without hiding later
+  valid events in the same batch.
+- Added a bounded, thread-safe recent Messenger message-ID cache to suppress
+  duplicate Wit actions from retried webhook deliveries.
+- Released per-message claims after handled Wit failures and unexpected action
+  exceptions while preserving later-message batch processing.
+
 ## 2026-06-12
 
+- Returned Messenger verification challenges as UTF-8 plain text to resolve
+  the reflected-XSS CodeQL finding while preserving exact challenge echoing.
+- Required exact `application/json` Messenger POST media types with optional
+  parameter support and fail-closed HTTP 415 responses.
+- Added dependency-free and Bottle/WebTest content-type regressions.
 - Normalized Wit transport failures, provider errors, malformed JSON, and
   unexpected response shapes into stable `WitError` results without exposing
   provider details.

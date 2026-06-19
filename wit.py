@@ -29,6 +29,16 @@ class WitError(Exception):
     pass
 
 
+def normalized_message_text(value):
+    if not isinstance(value, str):
+        raise WitError('Wit response was invalid.')
+
+    value = value.strip()
+    if not value:
+        raise WitError('Wit response was invalid.')
+    return value
+
+
 def req(logger, access_token, meth, path, params, **kwargs):
     full_url = WIT_API_HOST + path
     logger.debug('%s %s request', meth, full_url)
@@ -46,9 +56,9 @@ def req(logger, access_token, meth, path, params, **kwargs):
         )
     except requests.RequestException as error:
         raise WitError('Wit request failed.') from error
-    if rsp.status_code > 200:
-        raise WitError('Wit responded with status: ' + str(rsp.status_code) +
-                       ' (' + rsp.reason + ')')
+    if rsp.status_code != 200:
+        raise WitError(
+            'Wit responded with status: {0}.'.format(rsp.status_code))
     try:
         data = rsp.json()
     except (TypeError, ValueError) as error:
@@ -141,7 +151,7 @@ class Wit:
         if json['type'] == 'msg':
             self.throw_if_action_missing('send')
             response = {
-                'text': json.get('msg').encode('utf8'),
+                'text': normalized_message_text(json.get('msg')),
                 'quickreplies': json.get('quickreplies'),
             }
             self.actions['send'](request, response)

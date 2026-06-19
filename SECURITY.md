@@ -39,6 +39,23 @@ Messenger POST webhooks require a valid `X-Hub-Signature-256` calculated with
 `FB_APP_SECRET`. Keep that secret distinct from page and verification tokens.
 Webhook bodies larger than 1 MiB are rejected with HTTP 413 before signature
 verification, JSON parsing, or Wit action dispatch.
+Messenger POST requests must use the `application/json` media type; optional
+parameters and case differences are accepted, while other types return 415
+before signature verification or JSON parsing.
+Messenger GET verification challenges are returned as UTF-8 plain text so
+untrusted challenge values cannot be interpreted as HTML.
+Recent non-empty Messenger message IDs are claimed before Wit actions in a
+bounded process-local cache. Duplicate deliveries are acknowledged without
+repeating actions, while failed actions release their claims for provider
+retries. Claims do not span workers or process restarts.
+Messenger provider HTTP errors propagate through the Wit action and release
+the current message-ID claim so a later webhook delivery can retry the reply.
+OpenWeather failures for a known location produce a stable user-facing
+retry-later message. Provider exception text and stale Wit forecast copy are
+not forwarded to the Messenger user.
+Each signed webhook processes at most 20 valid Messenger user messages in
+payload order. Malformed nested sender or message values are ignored without
+preventing later valid events from reaching Wit.
 
 For web services, APIs, sockets, or scraping workflows, prioritize reports involving authentication bypass, authorization errors, injection, server-side request forgery, unsafe deserialization, credential leakage, data exposure, or denial-of-service conditions. Use test accounts and minimal proof-of-concept traffic only.
 
@@ -46,14 +63,23 @@ Messenger webhook payloads should only invoke Wit actions when both the sender
 ID and message text are textual and nonblank. Malformed sender IDs should be
 acknowledged without creating a Wit session.
 
+GET challenges require the exact Messenger subscription verification mode
+before token and challenge processing; malformed intent must fail without
+echoing caller-controlled challenge text.
+
 Expected Wit transport and response failures are isolated to the affected
 event so they do not force retries of an authenticated Messenger batch after
 earlier replies may have been sent. Public errors and logs must not include
 tokens, sender IDs, message text, request URLs, or provider response bodies.
+Wit message replies must remain normalized Unicode text before Messenger JSON
+serialization; missing, non-text, and blank provider replies fail closed with
+the same stable error.
 
 ## Dependency and Supply Chain Security
 
 Dependency updates should come from trusted package managers and should keep lockfiles in sync when lockfiles exist. Do not commit credentials, private keys, tokens, generated secrets, or machine-local configuration. If a vulnerability depends on a compromised package, typosquatting risk, insecure transitive dependency, or unsafe build step, include the package name, affected version, and the path through which it is used.
+
+Verified support covers Python 3.10, 3.12, and 3.14 with Bottle 0.13.4, Requests 2.34.2, and WebTest 3.0.7 pinned exactly.
 
 ## Safe Research Guidelines
 

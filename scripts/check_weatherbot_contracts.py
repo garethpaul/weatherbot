@@ -4,6 +4,7 @@ import importlib.util
 import hashlib
 import hmac
 import io
+import json
 import os
 import sys
 import types
@@ -42,6 +43,45 @@ WIT_ENTITY_NORMALIZATION_PLAN_PATH = (
 WIT_FAILURE_ISOLATION_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-12-weatherbot-wit-failure-isolation.md"
 )
+MESSENGER_CONTENT_TYPE_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-12-messenger-json-content-type.md"
+)
+ROOTED_CLEANUP_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-12-root-independent-cleanup.md"
+)
+MESSENGER_CHALLENGE_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-12-messenger-challenge-plain-text.md"
+)
+MESSENGER_ECHO_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-13-messenger-echo-guard.md"
+)
+MESSENGER_REPLAY_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-13-messenger-message-replay-guard.md"
+)
+MESSENGER_BATCH_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-13-messenger-batch-processing-bound.md"
+)
+MAKE_ROOT_PROTECTION_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-14-make-root-override-protection.md"
+)
+PROVIDER_SETUP_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-14-provider-setup-guide.md"
+)
+MESSENGER_REPLY_HTTP_STATUS_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-15-messenger-reply-http-status.md"
+)
+WEATHER_FAILURE_MESSAGE_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-16-weather-failure-user-message.md"
+)
+VERSION_CONTRACT_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-16-python-dependency-version-contract.md"
+)
+MESSENGER_VERIFICATION_MODE_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-16-messenger-verification-mode.md"
+)
+WIT_REPLY_TEXT_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-16-wit-reply-text-normalization.md"
+)
 
 
 class FakeBottle:
@@ -59,6 +99,7 @@ class MutableRequest:
         self.body = io.BytesIO(b"")
         self.content_length = 0
         self.headers = {
+            "Content-Type": "application/json",
             "X-Hub-Signature-256": "sha256=" + hmac.new(
                 b"app-secret", b"", hashlib.sha256).hexdigest()
         }
@@ -67,12 +108,14 @@ class MutableRequest:
 class MutableResponse:
     def __init__(self):
         self.status = 200
+        self.content_type = None
 
 
 class FakeHTTPResponse:
-    def __init__(self, content, payload=None):
+    def __init__(self, content, payload=None, error=None):
         self.content = content
         self._payload = payload or {}
+        self._error = error
         self.status_code = 200
         self.reason = "OK"
 
@@ -80,17 +123,20 @@ class FakeHTTPResponse:
         return self._payload
 
     def raise_for_status(self):
-        return None
+        if self._error is not None:
+            raise self._error
 
 
 class FakeRequests(types.SimpleNamespace):
     def __init__(self):
         super(FakeRequests, self).__init__()
         self.calls = []
+        self.response_error = None
 
     def post(self, url, **kwargs):
         self.calls.append(("post", url, kwargs))
-        return FakeHTTPResponse(b'{"recipient_id": "user-1"}')
+        return FakeHTTPResponse(
+            b'{"recipient_id": "user-1"}', error=self.response_error)
 
     def get(self, url, params=None, **kwargs):
         kwargs["params"] = params
@@ -244,7 +290,7 @@ def test_messenger_verification_rejects_missing_configured_token():
     messenger, request, response, _requests, _calls = load_messenger()
 
     messenger.FB_VERIFY_TOKEN = None
-    request.query = {"hub.challenge": "challenge-1"}
+    request.query = {"hub.mode": "subscribe", "hub.challenge": "challenge-1"}
     response.status = 200
 
     body = messenger.messenger_webhook()
@@ -256,7 +302,11 @@ def test_messenger_verification_rejects_missing_configured_token():
 def test_messenger_verification_rejects_wrong_token():
     messenger, request, response, _requests, _calls = load_messenger()
 
-    request.query = {"hub.challenge": "challenge-1", "hub.verify_token": "wrong"}
+    request.query = {
+        "hub.mode": "subscribe",
+        "hub.challenge": "challenge-1",
+        "hub.verify_token": "wrong",
+    }
     response.status = 200
 
     body = messenger.messenger_webhook()
@@ -265,28 +315,105 @@ def test_messenger_verification_rejects_wrong_token():
     assert_true(body != "challenge-1", "wrong verify token must not echo challenge")
 
 
+def test_messenger_verification_rejects_non_ascii_token():
+    messenger, request, response, _requests, _calls = load_messenger()
+
+    request.query = {
+        "hub.mode": "subscribe",
+        "hub.challenge": "challenge-1",
+        "hub.verify_token": "☃",
+    }
+
+    body = messenger.messenger_webhook()
+
+    assert_equal(response.status, 403, "non-ASCII verify token status")
+    assert_equal(
+        body,
+        "Invalid Request or Verification Token",
+        "non-ASCII verify token response",
+    )
+
+
 def test_messenger_verification_accepts_matching_token():
     messenger, request, response, _requests, _calls = load_messenger()
 
-    request.query = {"hub.challenge": "challenge-1", "hub.verify_token": "verify-token"}
+    request.query = {
+        "hub.mode": "subscribe",
+        "hub.challenge": "challenge-1",
+        "hub.verify_token": "verify-token",
+    }
     response.status = 200
 
     body = messenger.messenger_webhook()
 
     assert_equal(body, "challenge-1", "matching verify token challenge")
     assert_equal(response.status, 200, "matching verify token status")
+    assert_equal(response.content_type, "text/plain; charset=UTF-8", "verification challenge content type")
 
 
 def test_messenger_verification_requires_challenge():
     messenger, request, response, _requests, _calls = load_messenger()
 
-    request.query = {"hub.verify_token": "verify-token"}
+    request.query = {"hub.mode": "subscribe", "hub.verify_token": "verify-token"}
     response.status = 200
 
     body = messenger.messenger_webhook()
 
     assert_equal(response.status, 400, "missing challenge status")
     assert_true(body != "challenge-1", "missing challenge must not echo challenge")
+
+
+def test_messenger_verification_rejects_invalid_modes():
+    messenger, request, response, _requests, _calls = load_messenger()
+
+    for mode in (None, "Subscribe", " subscribe ", ["subscribe"]):
+        request.query = {
+            "hub.verify_token": "verify-token",
+            "hub.challenge": "challenge-1",
+        }
+        if mode is not None:
+            request.query["hub.mode"] = mode
+        response.status = 200
+
+        body = messenger.messenger_webhook()
+
+        assert_equal(response.status, 400, "invalid verification mode status {0!r}".format(mode))
+        assert_equal(body, "Invalid verification mode", "invalid verification mode body {0!r}".format(mode))
+        assert_true(body != "challenge-1", "invalid verification mode must not echo challenge")
+
+
+def test_messenger_verification_mode_source_contracts():
+    source = (ROOT / "messenger.py").read_text(encoding="utf-8")
+    webhook_source = source.split("@app.get('/webhook')", 1)[1].split("def secure_compare", 1)[0]
+    runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
+    for contract in (
+        "if request.query.get('hub.mode') != 'subscribe':",
+        "response.status = 400",
+        "return 'Invalid verification mode'",
+    ):
+        assert_true(contract in webhook_source, "missing Messenger verification-mode contract {0}".format(contract))
+
+    mode_guard = webhook_source.index("if request.query.get('hub.mode') != 'subscribe':")
+    token_read = webhook_source.index("verify_token = request.query.get('hub.verify_token')")
+    challenge_read = webhook_source.index("challenge = request.query.get('hub.challenge')")
+    assert_true(mode_guard < token_read < challenge_read, "Messenger verification mode must be checked before token and challenge processing")
+    assert_true(
+        "test_facebook_verification_requires_exact_subscribe_mode" in runtime_tests,
+        "runtime coverage must reject invalid Messenger verification modes",
+    )
+
+    docs = {
+        "README.md": "requires the exact `subscribe` verification mode",
+        "PROVIDER_SETUP.md": "`hub.mode=subscribe`",
+        "SECURITY.md": "exact Messenger subscription verification mode",
+        "VISION.md": "Require exact Messenger subscription verification intent",
+        "CHANGES.md": "Required exact Messenger subscription verification mode",
+    }
+    for relative_path, phrase in docs.items():
+        assert_true(
+            phrase in (ROOT / relative_path).read_text(encoding="utf-8"),
+            "{0} must document Messenger verification mode".format(relative_path),
+        )
 
 
 def test_messenger_post_ignores_non_message_events():
@@ -309,6 +436,102 @@ def test_messenger_post_ignores_non_message_events():
     assert_equal(calls, [], "non-message events must not call Wit actions")
 
 
+def test_messenger_post_ignores_echoes_and_continues_batch():
+    messenger, request, response, _requests, calls = load_messenger()
+    request.json = {
+        "object": "page",
+        "entry": [{
+            "messaging": [
+                {
+                    "sender": {"id": "page-1"},
+                    "message": {"text": "page reply", "is_echo": True},
+                },
+                {
+                    "sender": {"id": "user-1"},
+                    "message": {"text": "weather in Yountville"},
+                },
+            ]
+        }],
+    }
+    response.status = 200
+
+    body = messenger.messenger_post()
+
+    assert_equal(body, "ok", "Messenger echo event response")
+    assert_equal(calls, [("user-1", "weather in Yountville")], "post-echo Wit call")
+
+
+def test_messenger_post_ignores_malformed_nested_events_and_continues_batch():
+    messenger, request, response, _requests, calls = load_messenger()
+    request.json = {
+        "object": "page",
+        "entry": [{
+            "messaging": [
+                {"sender": ["malformed"], "message": {"text": "ignored"}},
+                {"sender": {"id": "ignored"}, "message": ["malformed"]},
+                {"sender": {"id": "user-2"}, "message": {"text": "weather"}},
+            ]
+        }],
+    }
+    response.status = 200
+
+    body = messenger.messenger_post()
+
+    assert_equal(response.status, 200, "malformed nested batch status")
+    assert_equal(body, "ok", "malformed nested batch response")
+    assert_equal(calls, [("user-2", "weather")], "malformed nested batch Wit calls")
+
+
+def test_messenger_post_caps_valid_message_batch():
+    messenger, request, response, _requests, calls = load_messenger()
+    request.json = {
+        "object": "page",
+        "entry": [{
+            "messaging": [
+                {
+                    "sender": {"id": "user-{0}".format(index)},
+                    "message": {
+                        "mid": "batch-{0}".format(index),
+                        "text": "weather-{0}".format(index),
+                    },
+                }
+                for index in range(messenger.MAX_MESSENGER_MESSAGES_PER_WEBHOOK + 1)
+            ]
+        }],
+    }
+    response.status = 200
+
+    body = messenger.messenger_post()
+
+    assert_equal(response.status, 200, "capped Messenger batch status")
+    assert_equal(body, "ok", "capped Messenger batch response")
+    assert_equal(
+        len(calls),
+        messenger.MAX_MESSENGER_MESSAGES_PER_WEBHOOK,
+        "capped Messenger batch Wit call count",
+    )
+    assert_equal(calls[-1], ("user-19", "weather-19"), "capped Messenger final call")
+
+
+def test_messenger_post_requires_boolean_true_echo_flag():
+    messenger, request, response, _requests, calls = load_messenger()
+    request.json = {
+        "object": "page",
+        "entry": [{
+            "messaging": [{
+                "sender": {"id": "user-1"},
+                "message": {"text": "weather", "is_echo": "false"},
+            }]
+        }],
+    }
+    response.status = 200
+
+    body = messenger.messenger_post()
+
+    assert_equal(body, "ok", "non-boolean echo flag response")
+    assert_equal(calls, [("user-1", "weather")], "non-boolean echo flag Wit call")
+
+
 def test_messenger_post_routes_text_messages_to_wit():
     messenger, request, response, _requests, calls = load_messenger()
 
@@ -327,6 +550,179 @@ def test_messenger_post_routes_text_messages_to_wit():
 
     assert_equal(body, "ok", "message event response")
     assert_equal(calls, [("user-1", "weather in Yountville")], "Wit action call")
+
+
+def messenger_payload(message_id="mid-1", text="weather", sender="user-1"):
+    message = {"text": text}
+    if message_id is not None:
+        message["mid"] = message_id
+    return {
+        "object": "page",
+        "entry": [{"messaging": [{"sender": {"id": sender}, "message": message}]}],
+    }
+
+
+def test_messenger_post_suppresses_replayed_message_ids():
+    messenger, request, _response, _requests, calls = load_messenger()
+    request.json = messenger_payload("mid-replayed")
+
+    assert_equal(messenger.messenger_post(), "ok", "first Messenger delivery")
+    assert_equal(messenger.messenger_post(), "ok", "replayed Messenger delivery")
+
+    assert_equal(calls, [("user-1", "weather")], "replayed message ID Wit calls")
+
+
+def test_messenger_post_duplicate_batch_item_does_not_block_later_message():
+    messenger, request, _response, _requests, calls = load_messenger()
+    request.json = {
+        "object": "page",
+        "entry": [{"messaging": [
+            {"sender": {"id": "user-1"}, "message": {"mid": "mid-1", "text": "first"}},
+            {"sender": {"id": "user-1"}, "message": {"mid": "mid-1", "text": "first"}},
+            {"sender": {"id": "user-2"}, "message": {"mid": "mid-2", "text": "second"}},
+        ]}],
+    }
+
+    assert_equal(messenger.messenger_post(), "ok", "duplicate batch response")
+    assert_equal(
+        calls,
+        [("user-1", "first"), ("user-2", "second")],
+        "duplicate batch Wit calls",
+    )
+
+
+def test_messenger_post_duplicate_ids_do_not_exhaust_batch_limit():
+    messenger, request, _response, _requests, calls = load_messenger()
+    duplicate_events = [
+        {"sender": {"id": "user-1"}, "message": {"mid": "mid-1", "text": "first"}}
+        for _index in range(messenger.MAX_MESSENGER_MESSAGES_PER_WEBHOOK)
+    ]
+    request.json = {
+        "object": "page",
+        "entry": [{"messaging": duplicate_events + [
+            {"sender": {"id": "user-2"}, "message": {"mid": "mid-2", "text": "second"}},
+        ]}],
+    }
+
+    assert_equal(messenger.messenger_post(), "ok", "duplicate-saturated batch response")
+    assert_equal(
+        calls,
+        [("user-1", "first"), ("user-2", "second")],
+        "duplicate IDs must not consume the processing allowance",
+    )
+
+
+def test_messenger_post_releases_claim_after_wit_failure():
+    messenger, request, _response, _requests, _calls = load_messenger()
+    processed = []
+
+    def run_actions(session_id, message):
+        processed.append((session_id, message))
+        if len(processed) == 1:
+            raise messenger.WitError("Wit request failed.")
+
+    messenger.client = types.SimpleNamespace(run_actions=run_actions)
+    request.json = messenger_payload("mid-retry")
+
+    assert_equal(messenger.messenger_post(), "ok", "failed Messenger delivery")
+    assert_equal(messenger.messenger_post(), "ok", "retried Messenger delivery")
+    assert_equal(
+        processed,
+        [("user-1", "weather"), ("user-1", "weather")],
+        "failed Wit claim release",
+    )
+
+
+def test_messenger_post_releases_claim_after_unexpected_failure():
+    messenger, request, _response, _requests, _calls = load_messenger()
+    processed = []
+
+    def run_actions(session_id, message):
+        processed.append((session_id, message))
+        if len(processed) == 1:
+            raise RuntimeError("programming error")
+
+    messenger.client = types.SimpleNamespace(run_actions=run_actions)
+    request.json = messenger_payload("mid-retry")
+
+    try:
+        messenger.messenger_post()
+    except RuntimeError as error:
+        assert_equal(str(error), "programming error", "unexpected action error")
+    else:
+        raise AssertionError("unexpected action errors must propagate")
+
+    assert_equal(messenger.messenger_post(), "ok", "retry after unexpected failure")
+    assert_equal(
+        processed,
+        [("user-1", "weather"), ("user-1", "weather")],
+        "unexpected failure claim release",
+    )
+
+
+def test_messenger_post_preserves_missing_and_malformed_ids():
+    for message_id in (None, {"not": "text"}):
+        messenger, request, _response, _requests, calls = load_messenger()
+        request.json = messenger_payload(message_id)
+
+        messenger.messenger_post()
+        messenger.messenger_post()
+
+        assert_equal(
+            calls,
+            [("user-1", "weather"), ("user-1", "weather")],
+            "message ID compatibility {0!r}".format(message_id),
+        )
+
+
+def test_recent_message_ids_evicts_oldest_claim_at_bound():
+    messenger, _request, _response, _requests, _calls = load_messenger()
+    recent = messenger.RecentMessageIds(2)
+
+    assert_true(recent.claim("mid-1"), "first replay claim")
+    assert_true(recent.claim("mid-2"), "second replay claim")
+    assert_true(recent.claim("mid-3"), "third replay claim")
+    assert_true(not recent.claim("mid-3"), "newest claim must remain protected")
+    assert_true(recent.claim("mid-1"), "oldest claim must be evicted")
+
+
+def test_messenger_replay_source_contracts():
+    source = (ROOT / "messenger.py").read_text(encoding="utf-8")
+    for contract in (
+            "MAX_RECENT_MESSENGER_MESSAGE_IDS = 1024",
+            "class RecentMessageIds(object):",
+            "self._lock = threading.Lock()",
+            "self._ids.popitem(last=False)",
+            "message_id = clean_text_value(message.get('mid'))",
+            "recent_messenger_message_ids.claim(message_id)",
+            "recent_messenger_message_ids.release(message_id)"):
+        assert_true(contract in source, "missing Messenger replay contract {0}".format(contract))
+
+    claim_position = source.index("recent_messenger_message_ids.claim(message_id)")
+    action_position = source.index("client.run_actions(session_id=fb_id, message=text)")
+    release_position = source.index("recent_messenger_message_ids.release(message_id)")
+    assert_true(
+        claim_position < action_position < release_position,
+        "claim, Wit action, and failure release must stay ordered",
+    )
+
+
+def test_messenger_batch_source_contracts():
+    source = (ROOT / "messenger.py").read_text(encoding="utf-8")
+    runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
+    for contract in (
+            "MAX_MESSENGER_MESSAGES_PER_WEBHOOK = 20",
+            "if not isinstance(sender, dict) or not isinstance(message, dict):",
+            "processed_messages = 0",
+            "if processed_messages >= MAX_MESSENGER_MESSAGES_PER_WEBHOOK:",
+            "processed_messages += 1",
+            "return messages"):
+        assert_true(contract in source, "missing Messenger batch contract {0}".format(contract))
+    for test_name in (
+            "test_facebook_malformed_nested_events_do_not_hide_later_messages",
+            "test_facebook_caps_valid_message_batch",
+            "test_facebook_duplicate_ids_do_not_exhaust_batch_limit"):
+        assert_true(test_name in runtime_tests, "missing Messenger batch runtime test {0}".format(test_name))
 
 
 def test_messenger_post_isolates_wit_failures_per_message():
@@ -484,6 +880,57 @@ def test_fb_message_uses_header_auth_and_timeout():
     )
 
 
+def test_messenger_post_releases_claim_after_provider_http_error():
+    messenger, request, _response, requests, _calls = load_messenger()
+    request.json = messenger_payload("mid-provider-http-error")
+    requests.response_error = RuntimeError("provider rejected reply")
+    messenger.client = types.SimpleNamespace(
+        run_actions=lambda session_id, message: messenger.fb_message(session_id, message)
+    )
+
+    try:
+        messenger.messenger_post()
+        raise AssertionError("Messenger provider HTTP errors must propagate")
+    except RuntimeError as exc:
+        assert_equal(str(exc), "provider rejected reply", "provider HTTP error")
+
+    requests.response_error = None
+    assert_equal(messenger.messenger_post(), "ok", "retry after provider HTTP error")
+    post_calls = [call for call in requests.calls if call[0] == "post"]
+    assert_equal(len(post_calls), 2, "provider HTTP error must release replay claim")
+
+
+def test_fb_message_http_status_source_contracts():
+    source = (ROOT / "messenger.py").read_text(encoding="utf-8")
+    runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
+    reply_start = source.index("def fb_message")
+    reply_end = source.index("def get_weather", reply_start)
+    reply_source = source[reply_start:reply_end]
+    post_position = reply_source.index("requests.post(")
+    status_position = reply_source.index("resp.raise_for_status()")
+    return_position = reply_source.index("return resp.content")
+    assert_true(
+        post_position < status_position < return_position,
+        "Messenger reply must reject provider HTTP errors before returning content",
+    )
+    assert_true(
+        "test_facebook_response_raises_for_http_error" in runtime_tests,
+        "Bottle/WebTest suite must cover Messenger provider HTTP errors",
+    )
+
+    docs = {
+        "README.md": "Unsuccessful Messenger provider HTTP responses raise",
+        "SECURITY.md": "Messenger provider HTTP errors propagate",
+        "VISION.md": "Fail Messenger replies on provider HTTP errors",
+        "CHANGES.md": "Rejected unsuccessful Messenger provider responses",
+    }
+    for relative_path, phrase in docs.items():
+        assert_true(
+            phrase in (ROOT / relative_path).read_text(encoding="utf-8"),
+            "{0} must document Messenger provider HTTP failures".format(relative_path),
+        )
+
+
 def test_weather_lookup_uses_https_params_and_timeout():
     messenger, _request, _response, requests, _calls = load_messenger()
 
@@ -508,6 +955,7 @@ def test_weather_lookup_handles_malformed_results():
         {"weather": ["Clear"]},
         {"weather": [{}]},
         {"weather": [{"main": ""}]},
+        {"weather": [{"main": {"unexpected": "shape"}}]},
     ]
 
     for payload in malformed_payloads:
@@ -518,6 +966,72 @@ def test_weather_lookup_handles_malformed_results():
 
         requests.get = fake_get
         assert_equal(messenger.get_weather("Yountville"), None, "malformed weather response")
+
+
+def test_send_uses_weather_failure_user_message():
+    messenger, _request, _response, _requests, _calls = load_messenger()
+    replies = []
+    messenger.fb_message = lambda user_id, text: replies.append((user_id, text))
+
+    messenger.send(
+        {"session_id": "user-1", "context": {"missingForecast": True}},
+        {},
+    )
+    assert_equal(
+        replies,
+        [("user-1", "I couldn't get the weather right now. Please try again.")],
+        "missing forecast reply",
+    )
+
+    for context in ({}, {"missingLocation": True}, {"missingForecast": False}, {"missingForecast": 1}, None, []):
+        replies[:] = []
+        messenger.send(
+            {"session_id": "user-1", "context": context},
+            {"text": "Which location should I check?"},
+        )
+        assert_equal(
+            replies,
+            [("user-1", "Which location should I check?")],
+            "non-failure reply for context {0!r}".format(context),
+        )
+
+    replies[:] = []
+    messenger.send(
+        {"session_id": "user-1"},
+        {"text": "Which location should I check?"},
+    )
+    assert_equal(
+        replies,
+        [("user-1", "Which location should I check?")],
+        "missing context reply",
+    )
+
+    source = (ROOT / "messenger.py").read_text(encoding="utf-8")
+    runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
+    assert_true(
+        "context.get('missingForecast') is True" in source,
+        "weather fallback must require exact boolean missingForecast state",
+    )
+    assert_true(
+        "test_send_uses_stable_text_for_missing_forecast" in runtime_tests,
+        "Bottle/WebTest suite must cover the missing-forecast override",
+    )
+    assert_true(
+        "test_send_preserves_wit_text_without_exact_missing_forecast" in runtime_tests,
+        "Bottle/WebTest suite must cover non-overriding contexts",
+    )
+
+    docs = {
+        "README.md": "Known-location weather lookup failures send a stable retry-later message",
+        "SECURITY.md": "Provider exception text and stale Wit forecast copy are",
+        "VISION.md": "Send stable retry-later text when a known-location forecast is unavailable",
+        "CHANGES.md": "Replaced stale Wit response text with a stable retry-later message",
+    }
+    for relative_path, phrase in docs.items():
+        assert_true(
+            phrase in (ROOT / relative_path).read_text(encoding="utf-8"),
+            "{0} must document the weather failure user message".format(relative_path),
+        )
 
 
 def test_request_timeout_accepts_positive_float_env():
@@ -564,6 +1078,74 @@ def test_wit_requests_use_timeout():
     assert_equal(kwargs.get("timeout"), 5, "wit request timeout")
 
 
+def test_wit_message_replies_remain_json_serializable_unicode():
+    load_messenger()
+    wit = sys.modules["wit"]
+    sent = []
+    responses = iter([
+        {"type": "msg", "msg": "  Prévisions prêtes  "},
+        {"type": "stop"},
+    ])
+    client = wit.Wit(
+        "wit-token",
+        actions={"send": lambda request, response: sent.append(response["text"])},
+    )
+    client.converse = lambda *_args, **_kwargs: next(responses)
+
+    client.run_actions("user-1", "weather")
+
+    assert_equal(sent, ["Prévisions prêtes"], "normalized Wit reply text")
+    assert_true(isinstance(sent[0], str), "Wit reply text must remain Unicode")
+    assert_equal(
+        json.loads(json.dumps({"text": sent[0]})),
+        {"text": "Prévisions prêtes"},
+        "Wit reply text JSON round trip",
+    )
+
+
+def test_wit_message_replies_reject_invalid_text():
+    load_messenger()
+    wit = sys.modules["wit"]
+    for invalid_text in (None, b"bytes", 42, "   "):
+        sent = []
+        client = wit.Wit(
+            "wit-token",
+            actions={"send": lambda request, response: sent.append(response)},
+        )
+        client.converse = lambda *_args, **_kwargs: {
+            "type": "msg",
+            "msg": invalid_text,
+        }
+        try:
+            client.run_actions("user-1", "weather")
+        except wit.WitError as error:
+            assert_equal(str(error), "Wit response was invalid.", "invalid Wit reply error")
+        else:
+            raise AssertionError("invalid Wit reply must raise WitError: {0!r}".format(invalid_text))
+        assert_equal(sent, [], "invalid Wit reply send calls")
+
+    source = (ROOT / "wit.py").read_text(encoding="utf-8")
+    runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
+    assert_true("def normalized_message_text(value):" in source, "Wit replies must be normalized")
+    assert_true("json.get('msg').encode('utf8')" not in source, "Wit replies must not become bytes")
+    assert_true(
+        "test_wit_message_reply_remains_json_serializable_unicode" in runtime_tests,
+        "runtime tests must cover Unicode Wit replies",
+    )
+    documents = {
+        "README.md": "normalized Unicode text through Messenger JSON serialization",
+        "SECURITY.md": "normalized Unicode text before Messenger JSON serialization",
+        "VISION.md": "normalized Unicode Wit replies through Messenger JSON serialization",
+        "CHANGES.md": "normalized Unicode Wit replies through Messenger JSON serialization",
+    }
+    for relative_path, phrase in documents.items():
+        document = " ".join((ROOT / relative_path).read_text(encoding="utf-8").split())
+        assert_true(
+            phrase in document,
+            relative_path + " must document Wit reply text normalization",
+        )
+
+
 def test_wit_debug_logs_avoid_message_payloads():
     source = (ROOT / "wit.py").read_text()
     assert_true(
@@ -585,6 +1167,28 @@ def test_wit_debug_logs_avoid_message_payloads():
 
 
 def test_wit_failures_use_stable_public_errors():
+    load_messenger()
+    wit = sys.modules["wit"]
+    original_request = wit.requests.request
+    try:
+        for status_code in (199, 201, 503):
+            response = FakeHTTPResponse(b"{}", {})
+            response.status_code = status_code
+            response.reason = None
+            wit.requests.request = lambda *_args, **_kwargs: response
+            try:
+                wit.req(wit.logging.getLogger("test"), "wit-token", "GET", "/message", {})
+            except wit.WitError as error:
+                assert_equal(
+                    str(error),
+                    "Wit responded with status: {0}.".format(status_code),
+                    "Wit non-200 status error",
+                )
+            else:
+                raise AssertionError("Wit non-200 status must fail: {0}".format(status_code))
+    finally:
+        wit.requests.request = original_request
+
     source = (ROOT / "wit.py").read_text(encoding="utf-8")
     runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
     for contract in [
@@ -602,6 +1206,7 @@ def test_wit_failures_use_stable_public_errors():
         "test_wit_transport_failure_uses_stable_error_with_cause",
         "test_wit_invalid_json_uses_stable_error_with_cause",
         "test_wit_non_object_json_uses_stable_error",
+        "test_wit_rejects_every_non_200_status_without_reason_dependency",
         "test_wit_provider_error_does_not_expose_response_details",
     ]:
         assert_true(test_name in runtime_tests, "Wit failure regression: " + test_name)
@@ -722,6 +1327,80 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(WEBHOOK_SIZE_PLAN_PATH, "weatherbot Messenger webhook size limit")
     assert_completed_plan(WIT_ENTITY_NORMALIZATION_PLAN_PATH, "weatherbot Wit entity normalization")
     assert_completed_plan(WIT_FAILURE_ISOLATION_PLAN_PATH, "weatherbot Wit failure isolation")
+    assert_completed_plan(MESSENGER_CONTENT_TYPE_PLAN_PATH, "weatherbot Messenger JSON content type")
+    assert_completed_plan(ROOTED_CLEANUP_PLAN_PATH, "weatherbot root-independent cleanup")
+    assert_completed_plan(MESSENGER_CHALLENGE_PLAN_PATH, "weatherbot Messenger challenge plain text")
+    assert_completed_plan(MESSENGER_ECHO_PLAN_PATH, "weatherbot Messenger echo guard")
+    assert_completed_plan(MESSENGER_REPLAY_PLAN_PATH, "weatherbot Messenger replay guard")
+    assert_completed_plan(MESSENGER_BATCH_PLAN_PATH, "weatherbot Messenger batch processing bound")
+    assert_completed_plan(MAKE_ROOT_PROTECTION_PLAN_PATH, "weatherbot Make root override protection")
+    assert_completed_plan(PROVIDER_SETUP_PLAN_PATH, "weatherbot provider setup guide")
+    assert_completed_plan(MESSENGER_REPLY_HTTP_STATUS_PLAN_PATH, "weatherbot Messenger reply HTTP status")
+    assert_completed_plan(WEATHER_FAILURE_MESSAGE_PLAN_PATH, "weatherbot weather failure user message")
+    assert_completed_plan(VERSION_CONTRACT_PLAN_PATH, "weatherbot Python and dependency versions")
+    assert_completed_plan(MESSENGER_VERIFICATION_MODE_PLAN_PATH, "weatherbot Messenger verification mode")
+    assert_completed_plan(WIT_REPLY_TEXT_PLAN_PATH, "weatherbot Wit reply text normalization")
+    checker_main = Path(__file__).read_text().rsplit("def main():", 1)[1]
+    assert_true(
+        "test_provider_setup_guide_is_auditable," in checker_main,
+        "provider setup guide contract must run in the main suite",
+    )
+    assert_true(
+        "test_supported_version_guidance," in checker_main,
+        "supported version guidance contract must run in the main suite",
+    )
+    assert_true(
+        "test_messenger_verification_mode_source_contracts," in checker_main,
+        "Messenger verification-mode contract must run in the main suite",
+    )
+    assert_true(
+        "test_wit_message_replies_remain_json_serializable_unicode," in checker_main
+        and "test_wit_message_replies_reject_invalid_text," in checker_main,
+        "Wit reply text contracts must run in the main suite",
+    )
+
+
+def test_provider_setup_guide_is_auditable():
+    guide = " ".join((ROOT / "PROVIDER_SETUP.md").read_text(encoding="utf-8").split())
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    vision = (ROOT / "VISION.md").read_text(encoding="utf-8")
+    changes = (ROOT / "CHANGES.md").read_text(encoding="utf-8")
+
+    for contract in (
+        "`WIT_TOKEN` | Wit.ai app",
+        "`FB_PAGE_TOKEN` | Meta Messenger page",
+        "`FB_VERIFY_TOKEN` | Operator-chosen secret",
+        "`FB_APP_SECRET` | Meta app",
+        "`OPEN_WEATHER_TOKEN` | OpenWeather account",
+        "configure this exact callback URL in the Meta app",
+        "https://<public-host>/webhook",
+        "`GET /webhook` handles subscription verification",
+        "returns the challenge as plain text only when",
+        "`POST /webhook` handles events",
+        "`Content-Type: application/json`",
+        "valid `X-Hub-Signature-256` generated with `FB_APP_SECRET`",
+        "body no larger than 1 MiB",
+        "provider-facing callback must be HTTPS",
+        "`REQUEST_TIMEOUT` sets a positive finite outbound timeout",
+        "`WEATHERBOT_DEBUG=1` enables Bottle debug mode for local development only",
+        "Run `make check` locally or in CI before any optional live provider test",
+        "Never attach raw webhook payloads",
+        "Unresolved verification or credential-boundary failures block deployment",
+    ):
+        assert_true(contract in guide, "provider setup guide must include {0}".format(contract))
+    assert_true("See `PROVIDER_SETUP.md`" in readme, "README must link the provider setup guide")
+    assert_true(
+        "docs/plans/2026-06-14-provider-setup-guide.md" in readme,
+        "README must link the provider setup plan",
+    )
+    assert_true(
+        "Keep provider credential ownership, HTTPS webhook wiring" in vision,
+        "VISION must preserve provider setup guidance",
+    )
+    assert_true(
+        "secret-safe provider setup guide" in changes,
+        "CHANGES must record provider setup guidance",
+    )
 
 
 def test_runtime_dependencies_and_ci_are_pinned():
@@ -764,15 +1443,58 @@ def test_runtime_dependencies_and_ci_are_pinned():
     assert_true("# v6.0.3" in workflow, "checkout pin annotation must identify the exact release")
     assert_true("# v6.2.0" in workflow, "setup-python pin annotation must identify the exact release")
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    assert_true("ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))" in makefile, "Makefile must resolve the repository root")
+    makefile_lines = set(makefile.splitlines())
+    assert_true("override ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))" in makefile_lines, "Makefile must protect the repository root")
+    assert_true("PYTHON ?= python3" in makefile_lines, "Makefile must preserve the Python command override")
     assert_true('find "$(ROOT)"' in makefile, "Makefile cleanup must stay inside the repository")
     assert_true('"$(ROOT)/scripts/check_weatherbot_contracts.py"' in makefile, "Makefile must use the rooted contract path")
+    assert_true('$(MAKE) -f "$(ROOT)/Makefile" clean' in makefile, "final cleanup must use the repository Makefile")
     messenger_source = (ROOT / "messenger.py").read_text(encoding="utf-8")
     runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
     assert_true("verify_messenger_signature" in messenger_source, "Messenger POST signatures must remain required")
     assert_true("MAX_MESSENGER_WEBHOOK_BYTES = 1024 * 1024" in messenger_source, "Messenger webhook size limit must remain 1 MiB")
     assert_true("request.body.read(MAX_MESSENGER_WEBHOOK_BYTES + 1)" in messenger_source, "Messenger request body reads must remain bounded")
     assert_true("test_facebook_rejects_oversized_payload" in runtime_tests, "WebTest must cover oversized Messenger payloads")
+    assert_true("is_json_content_type" in messenger_source, "Messenger POST requests must require JSON media types")
+    assert_true("test_facebook_rejects_json_prefix_spoof" in runtime_tests, "WebTest must reject JSON prefix spoofing")
+    assert_true("response.content_type = 'text/plain; charset=UTF-8'" in messenger_source, "Messenger challenge responses must be plain text")
+    assert_true("test_facebook_verification_challenge_is_plain_text" in runtime_tests, "WebTest must cover challenge response type")
+
+
+def test_supported_version_guidance():
+    guidance = (
+        "Verified support covers Python 3.10, 3.12, and 3.14 with Bottle 0.13.4, "
+        "Requests 2.34.2, and WebTest 3.0.7 pinned exactly."
+    )
+    documents = {
+        name: (ROOT / name).read_text(encoding="utf-8")
+        for name in ("AGENTS.md", "README.md", "SECURITY.md", "VISION.md", "CHANGES.md")
+    }
+    for name, text in documents.items():
+        assert_true(guidance in text, name + " must document the supported version contract")
+    assert_true(
+        "Treat Python and API versions as legacy until documented" not in documents["VISION.md"],
+        "VISION must remove the stale undocumented-version classification",
+    )
+    assert_true(
+        "Document Python and dependency version constraints" not in documents["VISION.md"],
+        "VISION must remove the completed version-documentation priority",
+    )
+
+    plan = VERSION_CONTRACT_PLAN_PATH.read_text(encoding="utf-8")
+    assert_equal(plan.count("Status: Completed"), 1, "version plan completed status")
+    assert_equal(plan.count("Status:"), 1, "version plan status count")
+    verification = plan.split("## Verification Results", 1)[-1]
+    for evidence in (
+        "Bottle/WebTest route suite",
+        "external-directory `make check`",
+        "hostile mutations",
+    ):
+        assert_true(evidence in verification, "version plan verification: " + evidence)
+    assert_true(
+        not any(word in verification.lower() for word in ("pending", "todo", "tbd", "not run")),
+        "version plan verification must not contain placeholders",
+    )
 
 
 def test_messenger_post_rejects_oversized_declared_body():
@@ -798,18 +1520,63 @@ def test_messenger_post_rejects_oversized_streamed_body():
     assert_equal(calls, [], "oversized streamed Messenger body Wit calls")
 
 
+def test_messenger_post_accepts_json_content_type_parameters():
+    messenger, request, response, _requests, calls = load_messenger()
+    request.headers["Content-Type"] = "Application/JSON; charset=UTF-8"
+    request.json = {"object": "page", "entry": []}
+
+    body = messenger.messenger_post()
+
+    assert_equal(response.status, 200, "parameterized JSON Messenger status")
+    assert_equal(body, "ok", "parameterized JSON Messenger response")
+    assert_equal(calls, [], "parameterized empty Messenger payload Wit calls")
+
+
+def test_messenger_post_rejects_non_json_content_types_before_authentication():
+    for content_type in (None, "text/plain", "application/jsonp", "application/ld+json"):
+        messenger, request, response, _requests, calls = load_messenger()
+        request.headers = {"X-Hub-Signature-256": "sha256=invalid"}
+        if content_type is not None:
+            request.headers["Content-Type"] = content_type
+        request.json = {"object": "page", "entry": []}
+
+        body = messenger.messenger_post()
+
+        assert_equal(response.status, 415, "non-JSON Messenger status {0!r}".format(content_type))
+        assert_equal(body, "Unsupported media type", "non-JSON Messenger response {0!r}".format(content_type))
+        assert_equal(calls, [], "non-JSON Messenger payload Wit calls")
+
+
 def main():
     tests = [
         test_messenger_post_rejects_oversized_declared_body,
         test_messenger_post_rejects_oversized_streamed_body,
+        test_messenger_post_accepts_json_content_type_parameters,
+        test_messenger_post_rejects_non_json_content_types_before_authentication,
         test_messenger_post_rejects_invalid_json_shape,
         test_messenger_post_rejects_non_page_object,
         test_messenger_verification_rejects_missing_configured_token,
         test_messenger_verification_rejects_wrong_token,
+        test_messenger_verification_rejects_non_ascii_token,
         test_messenger_verification_accepts_matching_token,
         test_messenger_verification_requires_challenge,
+        test_messenger_verification_rejects_invalid_modes,
+        test_messenger_verification_mode_source_contracts,
         test_messenger_post_ignores_non_message_events,
+        test_messenger_post_ignores_echoes_and_continues_batch,
+        test_messenger_post_ignores_malformed_nested_events_and_continues_batch,
+        test_messenger_post_caps_valid_message_batch,
+        test_messenger_post_requires_boolean_true_echo_flag,
         test_messenger_post_routes_text_messages_to_wit,
+        test_messenger_post_suppresses_replayed_message_ids,
+        test_messenger_post_duplicate_batch_item_does_not_block_later_message,
+        test_messenger_post_duplicate_ids_do_not_exhaust_batch_limit,
+        test_messenger_post_releases_claim_after_wit_failure,
+        test_messenger_post_releases_claim_after_unexpected_failure,
+        test_messenger_post_preserves_missing_and_malformed_ids,
+        test_recent_message_ids_evicts_oldest_claim_at_bound,
+        test_messenger_replay_source_contracts,
+        test_messenger_batch_source_contracts,
         test_messenger_post_isolates_wit_failures_per_message,
         test_messenger_post_propagates_unexpected_action_errors,
         test_messenger_post_ignores_blank_message_text,
@@ -817,13 +1584,18 @@ def main():
         test_messenger_post_ignores_invalid_sender_ids,
         test_messenger_post_trims_sender_id,
         test_fb_message_uses_header_auth_and_timeout,
+        test_messenger_post_releases_claim_after_provider_http_error,
+        test_fb_message_http_status_source_contracts,
         test_weather_lookup_uses_https_params_and_timeout,
         test_weather_lookup_handles_malformed_results,
+        test_send_uses_weather_failure_user_message,
         test_request_timeout_accepts_positive_float_env,
         test_request_timeout_defaults_for_invalid_env,
         test_bottle_debug_is_disabled_by_default,
         test_bottle_debug_requires_truthy_env_flag,
         test_wit_requests_use_timeout,
+        test_wit_message_replies_remain_json_serializable_unicode,
+        test_wit_message_replies_reject_invalid_text,
         test_wit_debug_logs_avoid_message_payloads,
         test_wit_failures_use_stable_public_errors,
         test_first_entity_value_handles_malformed_entities,
@@ -831,7 +1603,9 @@ def main():
         test_get_forecast_handles_malformed_weather_results,
         test_get_forecast_handles_weather_lookup_exceptions,
         test_completed_plans_are_in_docs_plans,
+        test_provider_setup_guide_is_auditable,
         test_runtime_dependencies_and_ci_are_pinned,
+        test_supported_version_guidance,
     ]
     for test in tests:
         test()

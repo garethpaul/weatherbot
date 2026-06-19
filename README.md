@@ -30,6 +30,7 @@ Additional scan context:
 
 - Git
 - Python 3.10 or newer; deployment tracks the Python 3.14 line
+- Verified support covers Python 3.10, 3.12, and 3.14 with Bottle 0.13.4, Requests 2.34.2, and WebTest 3.0.7 pinned exactly.
 
 ### Setup
 
@@ -49,8 +50,9 @@ The setup commands above are derived from repository files. Legacy mobile, Pytho
 
 - `make verify` runs syntax checks and dependency-free webhook, Wit action,
   Wit entity normalization, Messenger object validation, Messenger sender/text
-  normalization, Messenger body size, OpenWeather shape, request timeout,
-  outbound API, weather fallback, Wit failure-isolation, and Wit log-privacy
+  normalization, Messenger replay suppression and body size, OpenWeather shape,
+  request timeout, outbound API, weather fallback, Wit failure-isolation, and
+  Unicode reply normalization, malformed reply rejection, and Wit log-privacy
   contract checks.
 - `make check` runs `make verify` with bytecode cleanup before and after.
 - `python3 scripts/check_weatherbot_contracts.py` runs just the webhook and outbound API contracts.
@@ -65,14 +67,29 @@ When the required SDK or runtime is unavailable, use static checks and source re
 
 ## Configuration and Secrets
 
+- See `PROVIDER_SETUP.md` for provider ownership, secret injection, the shared
+  HTTPS `/webhook` GET/POST contract, optional settings, setup order, and
+  redacted verification evidence.
 - `WIT_TOKEN` configures Wit.ai access.
 - `FB_PAGE_TOKEN` configures Facebook Messenger replies.
 - `FB_VERIFY_TOKEN` configures Messenger webhook verification.
+- Messenger GET verification requires the exact `subscribe` verification mode
+  before the configured token and challenge are accepted.
 - `FB_APP_SECRET` validates `X-Hub-Signature-256` on Messenger POST payloads.
 - Messenger POST bodies are limited to 1 MiB before signature verification.
 - Expected Wit transport and response failures are isolated to the affected
   Messenger event so later messages in an authenticated batch still run and
   the valid webhook can be acknowledged.
+- Wit message replies remain normalized Unicode text through Messenger JSON
+  serialization; missing, non-text, and blank replies fail with a stable error.
+- Known-location weather lookup failures send a stable retry-later message
+  instead of forwarding stale Wit forecast text or provider details.
+- Recent non-empty Messenger message IDs are claimed in a bounded process-local
+  cache so retries do not repeat Wit actions; failed actions release claims.
+- Unsuccessful Messenger provider HTTP responses raise before reply content is
+  accepted, allowing the current webhook message-ID claim to be retried.
+- Signed Messenger batches process at most 20 valid user messages in payload
+  order; malformed nested events and echoes do not hide later valid messages.
 - `OPEN_WEATHER_TOKEN` configures OpenWeather lookup.
 - `REQUEST_TIMEOUT` optionally overrides outbound request timeout seconds;
   invalid, non-finite, or non-positive values fall back to `5.0`.
@@ -119,6 +136,22 @@ When the required SDK or runtime is unavailable, use static checks and source re
   unauthenticated request-body limit.
 - See `docs/plans/2026-06-10-weatherbot-wit-entity-normalization.md` for
   malformed nested entity rejection and location text normalization.
+- See `docs/plans/2026-06-12-messenger-json-content-type.md` for the exact JSON
+  media-type requirement on signed Messenger webhook requests.
+- See `docs/plans/2026-06-12-messenger-challenge-plain-text.md` for the
+  reflected-XSS-safe verification challenge response contract.
+- See `docs/plans/2026-06-13-messenger-echo-guard.md` for ignoring page echo
+  events without hiding later user messages in the same webhook batch.
+- See `docs/plans/2026-06-13-messenger-message-replay-guard.md` for bounded
+  process-local retry suppression and per-message failure recovery.
+- See `docs/plans/2026-06-13-messenger-batch-processing-bound.md` for ordered,
+  bounded Messenger batch handling and malformed-event isolation.
+- See `docs/plans/2026-06-14-provider-setup-guide.md` for provider credential,
+  endpoint, and redacted verification guidance.
+- See `docs/plans/2026-06-15-messenger-reply-http-status.md` for Messenger
+  provider HTTP failure handling and replay-claim recovery.
+- See `docs/plans/2026-06-16-weather-failure-user-message.md` for the stable
+  user-facing reply when a known-location weather lookup is unavailable.
 
 ## Contributing
 

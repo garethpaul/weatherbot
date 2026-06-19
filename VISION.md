@@ -19,23 +19,28 @@ Priority:
 - Reject non-page Messenger webhook payloads before Wit action handling
 - Reject blank or non-text Messenger sender IDs before Wit action handling
 - Reject blank Messenger message text before Wit action handling
+- Suppress retried Messenger message IDs before repeating Wit actions
+- Process Messenger message batches in order with a fixed per-webhook cap
+- Require exact Messenger subscription verification intent before challenges
+- Fail Messenger replies on provider HTTP errors so webhook retries remain
+  recoverable
 - Isolate expected Wit failures per Messenger event to avoid batch retry
   amplification after earlier replies
+- Preserve normalized Unicode Wit replies through Messenger JSON serialization
+- Reject missing, non-text, or blank Wit reply text with a stable error
 - Make weather lookup and response flow easy to trace
 - Treat malformed Wit entities as missing user location
 - Normalize flat and nested Wit location values before weather lookup
 - Treat malformed OpenWeather results as missing forecasts
 - Treat OpenWeather lookup exceptions as missing forecasts
+- Send stable retry-later text when a known-location forecast is unavailable
 - Keep outbound request timeout configuration bounded and non-crashing
 - Keep Bottle debug mode disabled unless explicitly enabled locally
 - Avoid debug logging user messages, entities, or Wit response payloads
-- Treat Python and API versions as legacy until documented
-
-Next priorities:
-
-- Add README setup notes for each token and webhook endpoint
-- Add user-facing fallback text for weather lookup failures
-- Document Python and dependency version constraints
+- Keep provider credential ownership, HTTPS webhook wiring, and redacted
+  verification evidence explicit
+- Verified support covers Python 3.10, 3.12, and 3.14 with Bottle 0.13.4, Requests 2.34.2, and WebTest 3.0.7 pinned exactly.
+- Treat provider API behavior as credential-bound until live version contracts are reviewed
 
 Contribution rules:
 

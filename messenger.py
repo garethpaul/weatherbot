@@ -22,6 +22,8 @@ import hashlib
 import math
 import os
 import requests
+import threading
+from collections import OrderedDict
 from sys import argv
 from wit import Wit, WitError
 from bottle import Bottle, request, response, debug
@@ -37,6 +39,9 @@ FB_APP_SECRET = os.environ.get('FB_APP_SECRET')
 OPEN_WEATHER_TOKEN = os.environ.get('OPEN_WEATHER_TOKEN')
 FB_MESSAGES_URL = 'https://graph.facebook.com/me/messages'
 OPEN_WEATHER_URL = 'https://api.openweathermap.org/data/2.5/weather'
+WEATHER_UNAVAILABLE_MESSAGE = (
+    "I couldn't get the weather right now. Please try again."
+)
 
 
 def positive_float_from_env(name, default):
@@ -61,6 +66,32 @@ REQUEST_TIMEOUT = positive_float_from_env('REQUEST_TIMEOUT', 5.0)
 debug(truthy_env('WEATHERBOT_DEBUG'))
 app = Bottle()
 MAX_MESSENGER_WEBHOOK_BYTES = 1024 * 1024
+MAX_RECENT_MESSENGER_MESSAGE_IDS = 1024
+MAX_MESSENGER_MESSAGES_PER_WEBHOOK = 20
+
+
+class RecentMessageIds(object):
+    def __init__(self, max_entries):
+        self.max_entries = max_entries
+        self._ids = OrderedDict()
+        self._lock = threading.Lock()
+
+    def claim(self, message_id):
+        with self._lock:
+            if message_id in self._ids:
+                return False
+            self._ids[message_id] = None
+            while len(self._ids) > self.max_entries:
+                self._ids.popitem(last=False)
+            return True
+
+    def release(self, message_id):
+        with self._lock:
+            self._ids.pop(message_id, None)
+
+
+recent_messenger_message_ids = RecentMessageIds(
+    MAX_RECENT_MESSENGER_MESSAGE_IDS)
 
 
 # Facebook Messenger GET Webhook
@@ -69,6 +100,11 @@ def messenger_webhook():
     """
     A webhook to return a challenge
     """
+    response.content_type = 'text/plain; charset=UTF-8'
+    if request.query.get('hub.mode') != 'subscribe':
+        response.status = 400
+        return 'Invalid verification mode'
+
     verify_token = request.query.get('hub.verify_token')
     # check whether the verify tokens match
     if not secure_compare(verify_token, FB_VERIFY_TOKEN):
@@ -87,8 +123,8 @@ def secure_compare(left, right):
     if not (left and right):
         return False
 
-    left = str(left)
-    right = str(right)
+    left = str(left).encode('utf-8')
+    right = str(right).encode('utf-8')
     compare_digest = getattr(hmac, 'compare_digest', None)
     if compare_digest:
         return compare_digest(left, right)
@@ -97,8 +133,8 @@ def secure_compare(left, right):
         return False
 
     result = 0
-    for left_char, right_char in zip(left, right):
-        result |= ord(left_char) ^ ord(right_char)
+    for left_char, right_char in zip(bytearray(left), bytearray(right)):
+        result |= left_char ^ right_char
     return result == 0
 
 
@@ -112,6 +148,10 @@ def messenger_post():
     if content_length is not None and content_length > MAX_MESSENGER_WEBHOOK_BYTES:
         response.status = 413
         return 'Payload too large'
+
+    if not is_json_content_type(request.headers.get('Content-Type')):
+        response.status = 415
+        return 'Unsupported media type'
 
     raw_body = request.body.read(MAX_MESSENGER_WEBHOOK_BYTES + 1)
     if len(raw_body) > MAX_MESSENGER_WEBHOOK_BYTES:
@@ -136,15 +176,35 @@ def messenger_post():
         response.status = 400
         return 'Invalid payload'
 
-    for fb_id, text in messenger_text_messages(data):
+    processed_messages = 0
+    for fb_id, text, message_id in messenger_text_messages(data):
+        if processed_messages >= MAX_MESSENGER_MESSAGES_PER_WEBHOOK:
+            break
+        if message_id and not recent_messenger_message_ids.claim(message_id):
+            continue
+        processed_messages += 1
         # Let's forward the message to the Wit.ai Bot Engine
         try:
             client.run_actions(session_id=fb_id, message=text)
         except WitError:
+            if message_id:
+                recent_messenger_message_ids.release(message_id)
             continue
+        except Exception:
+            if message_id:
+                recent_messenger_message_ids.release(message_id)
+            raise
 
     # must send back response quickly
     return 'ok'
+
+
+def is_json_content_type(value):
+    if not isinstance(value, str):
+        return False
+
+    media_type = value.split(';', 1)[0].strip().lower()
+    return media_type == 'application/json'
 
 
 def verify_messenger_signature(raw_body, signature, app_secret):
@@ -159,7 +219,7 @@ def verify_messenger_signature(raw_body, signature, app_secret):
 
 def messenger_text_messages(data):
     """
-    Extract supported Messenger sender/text pairs from a webhook payload.
+    Extract supported Messenger sender/text/message-ID tuples from a payload.
     """
     messages = []
     entries = data.get('entry')
@@ -175,12 +235,17 @@ def messenger_text_messages(data):
         for event in events:
             if not isinstance(event, dict):
                 continue
-            sender = event.get('sender') or {}
-            message = event.get('message') or {}
+            sender = event.get('sender')
+            message = event.get('message')
+            if not isinstance(sender, dict) or not isinstance(message, dict):
+                continue
+            if message.get('is_echo') is True:
+                continue
             fb_id = clean_text_value(sender.get('id'))
             text = clean_text_value(message.get('text'))
+            message_id = clean_text_value(message.get('mid'))
             if fb_id and text:
-                messages.append((fb_id, text))
+                messages.append((fb_id, text, message_id))
     return messages
 
 
@@ -211,6 +276,7 @@ def fb_message(sender_id, text):
         json=data,
         headers={'Authorization': 'Bearer {0}'.format(FB_PAGE_TOKEN or '')},
         timeout=REQUEST_TIMEOUT)
+    resp.raise_for_status()
     return resp.content
 
 
@@ -227,10 +293,7 @@ def get_weather(text):
     current = weather[0]
     if not isinstance(current, dict):
         return None
-    main = current.get('main')
-    if not main:
-        return None
-    return str(main)
+    return clean_text_value(current.get('main'))
 
 
 def first_entity_value(entities, entity):
@@ -260,7 +323,11 @@ def send(request, response):
     """
     # We use the fb_id as equal to session_id
     fb_id = request['session_id']
-    text = response['text']
+    context = request.get('context')
+    if isinstance(context, dict) and context.get('missingForecast') is True:
+        text = WEATHER_UNAVAILABLE_MESSAGE
+    else:
+        text = response['text']
     # send message
     fb_message(fb_id, text)
 
