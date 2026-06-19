@@ -56,9 +56,9 @@ def req(logger, access_token, meth, path, params, **kwargs):
         )
     except requests.RequestException as error:
         raise WitError('Wit request failed.') from error
-    if rsp.status_code > 200:
-        raise WitError('Wit responded with status: ' + str(rsp.status_code) +
-                       ' (' + rsp.reason + ')')
+    if rsp.status_code != 200:
+        raise WitError(
+            'Wit responded with status: {0}.'.format(rsp.status_code))
     try:
         data = rsp.json()
     except (TypeError, ValueError) as error:

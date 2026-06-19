@@ -315,6 +315,25 @@ def test_messenger_verification_rejects_wrong_token():
     assert_true(body != "challenge-1", "wrong verify token must not echo challenge")
 
 
+def test_messenger_verification_rejects_non_ascii_token():
+    messenger, request, response, _requests, _calls = load_messenger()
+
+    request.query = {
+        "hub.mode": "subscribe",
+        "hub.challenge": "challenge-1",
+        "hub.verify_token": "☃",
+    }
+
+    body = messenger.messenger_webhook()
+
+    assert_equal(response.status, 403, "non-ASCII verify token status")
+    assert_equal(
+        body,
+        "Invalid Request or Verification Token",
+        "non-ASCII verify token response",
+    )
+
+
 def test_messenger_verification_accepts_matching_token():
     messenger, request, response, _requests, _calls = load_messenger()
 
@@ -572,6 +591,27 @@ def test_messenger_post_duplicate_batch_item_does_not_block_later_message():
     )
 
 
+def test_messenger_post_duplicate_ids_do_not_exhaust_batch_limit():
+    messenger, request, _response, _requests, calls = load_messenger()
+    duplicate_events = [
+        {"sender": {"id": "user-1"}, "message": {"mid": "mid-1", "text": "first"}}
+        for _index in range(messenger.MAX_MESSENGER_MESSAGES_PER_WEBHOOK)
+    ]
+    request.json = {
+        "object": "page",
+        "entry": [{"messaging": duplicate_events + [
+            {"sender": {"id": "user-2"}, "message": {"mid": "mid-2", "text": "second"}},
+        ]}],
+    }
+
+    assert_equal(messenger.messenger_post(), "ok", "duplicate-saturated batch response")
+    assert_equal(
+        calls,
+        [("user-1", "first"), ("user-2", "second")],
+        "duplicate IDs must not consume the processing allowance",
+    )
+
+
 def test_messenger_post_releases_claim_after_wit_failure():
     messenger, request, _response, _requests, _calls = load_messenger()
     processed = []
@@ -673,12 +713,15 @@ def test_messenger_batch_source_contracts():
     for contract in (
             "MAX_MESSENGER_MESSAGES_PER_WEBHOOK = 20",
             "if not isinstance(sender, dict) or not isinstance(message, dict):",
-            "if len(messages) >= MAX_MESSENGER_MESSAGES_PER_WEBHOOK:",
+            "processed_messages = 0",
+            "if processed_messages >= MAX_MESSENGER_MESSAGES_PER_WEBHOOK:",
+            "processed_messages += 1",
             "return messages"):
         assert_true(contract in source, "missing Messenger batch contract {0}".format(contract))
     for test_name in (
             "test_facebook_malformed_nested_events_do_not_hide_later_messages",
-            "test_facebook_caps_valid_message_batch"):
+            "test_facebook_caps_valid_message_batch",
+            "test_facebook_duplicate_ids_do_not_exhaust_batch_limit"):
         assert_true(test_name in runtime_tests, "missing Messenger batch runtime test {0}".format(test_name))
 
 
@@ -912,6 +955,7 @@ def test_weather_lookup_handles_malformed_results():
         {"weather": ["Clear"]},
         {"weather": [{}]},
         {"weather": [{"main": ""}]},
+        {"weather": [{"main": {"unexpected": "shape"}}]},
     ]
 
     for payload in malformed_payloads:
@@ -1123,6 +1167,28 @@ def test_wit_debug_logs_avoid_message_payloads():
 
 
 def test_wit_failures_use_stable_public_errors():
+    load_messenger()
+    wit = sys.modules["wit"]
+    original_request = wit.requests.request
+    try:
+        for status_code in (199, 201, 503):
+            response = FakeHTTPResponse(b"{}", {})
+            response.status_code = status_code
+            response.reason = None
+            wit.requests.request = lambda *_args, **_kwargs: response
+            try:
+                wit.req(wit.logging.getLogger("test"), "wit-token", "GET", "/message", {})
+            except wit.WitError as error:
+                assert_equal(
+                    str(error),
+                    "Wit responded with status: {0}.".format(status_code),
+                    "Wit non-200 status error",
+                )
+            else:
+                raise AssertionError("Wit non-200 status must fail: {0}".format(status_code))
+    finally:
+        wit.requests.request = original_request
+
     source = (ROOT / "wit.py").read_text(encoding="utf-8")
     runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
     for contract in [
@@ -1140,6 +1206,7 @@ def test_wit_failures_use_stable_public_errors():
         "test_wit_transport_failure_uses_stable_error_with_cause",
         "test_wit_invalid_json_uses_stable_error_with_cause",
         "test_wit_non_object_json_uses_stable_error",
+        "test_wit_rejects_every_non_200_status_without_reason_dependency",
         "test_wit_provider_error_does_not_expose_response_details",
     ]:
         assert_true(test_name in runtime_tests, "Wit failure regression: " + test_name)
@@ -1490,6 +1557,7 @@ def main():
         test_messenger_post_rejects_non_page_object,
         test_messenger_verification_rejects_missing_configured_token,
         test_messenger_verification_rejects_wrong_token,
+        test_messenger_verification_rejects_non_ascii_token,
         test_messenger_verification_accepts_matching_token,
         test_messenger_verification_requires_challenge,
         test_messenger_verification_rejects_invalid_modes,
@@ -1502,6 +1570,7 @@ def main():
         test_messenger_post_routes_text_messages_to_wit,
         test_messenger_post_suppresses_replayed_message_ids,
         test_messenger_post_duplicate_batch_item_does_not_block_later_message,
+        test_messenger_post_duplicate_ids_do_not_exhaust_batch_limit,
         test_messenger_post_releases_claim_after_wit_failure,
         test_messenger_post_releases_claim_after_unexpected_failure,
         test_messenger_post_preserves_missing_and_malformed_ids,

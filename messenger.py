@@ -123,8 +123,8 @@ def secure_compare(left, right):
     if not (left and right):
         return False
 
-    left = str(left)
-    right = str(right)
+    left = str(left).encode('utf-8')
+    right = str(right).encode('utf-8')
     compare_digest = getattr(hmac, 'compare_digest', None)
     if compare_digest:
         return compare_digest(left, right)
@@ -133,8 +133,8 @@ def secure_compare(left, right):
         return False
 
     result = 0
-    for left_char, right_char in zip(left, right):
-        result |= ord(left_char) ^ ord(right_char)
+    for left_char, right_char in zip(bytearray(left), bytearray(right)):
+        result |= left_char ^ right_char
     return result == 0
 
 
@@ -176,9 +176,13 @@ def messenger_post():
         response.status = 400
         return 'Invalid payload'
 
+    processed_messages = 0
     for fb_id, text, message_id in messenger_text_messages(data):
+        if processed_messages >= MAX_MESSENGER_MESSAGES_PER_WEBHOOK:
+            break
         if message_id and not recent_messenger_message_ids.claim(message_id):
             continue
+        processed_messages += 1
         # Let's forward the message to the Wit.ai Bot Engine
         try:
             client.run_actions(session_id=fb_id, message=text)
@@ -242,8 +246,6 @@ def messenger_text_messages(data):
             message_id = clean_text_value(message.get('mid'))
             if fb_id and text:
                 messages.append((fb_id, text, message_id))
-                if len(messages) >= MAX_MESSENGER_MESSAGES_PER_WEBHOOK:
-                    return messages
     return messages
 
 
@@ -291,10 +293,7 @@ def get_weather(text):
     current = weather[0]
     if not isinstance(current, dict):
         return None
-    main = current.get('main')
-    if not main:
-        return None
-    return str(main)
+    return clean_text_value(current.get('main'))
 
 
 def first_entity_value(entities, entity):

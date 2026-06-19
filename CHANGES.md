@@ -1,5 +1,16 @@
 # Changes
 
+## 2026-06-19
+
+- Rejected non-ASCII Messenger verification tokens with HTTP 403 instead of
+  raising from constant-time comparison.
+- Counted only newly claimed Messenger messages toward the 20-message webhook
+  processing limit so replayed IDs cannot starve later unique events.
+- Rejected non-text OpenWeather condition values instead of stringifying
+  malformed provider objects into user-facing forecasts.
+- Rejected every non-200 Wit response with a stable status error that does not
+  depend on an optional HTTP reason phrase.
+
 ## 2026-06-16
 
 - Preserved normalized Unicode Wit replies through Messenger JSON serialization

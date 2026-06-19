@@ -86,6 +86,15 @@ class TestMessenger(unittest.TestCase):
                 self.assertEqual(response.text, 'Invalid verification mode')
                 self.assertNotEqual(response.text, self.challenge)
 
+    def test_facebook_verification_rejects_non_ascii_token(self):
+        response = test_app.get(
+            '/webhook?hub.mode=subscribe&hub.verify_token=%E2%98%83'
+            '&hub.challenge=123',
+            expect_errors=True)
+
+        self.assertEqual(response.status_int, 403)
+        self.assertEqual(response.text, 'Invalid Request or Verification Token')
+
     def test_facebook_delivery_event_is_ignored(self):
         """
         Delivery events should be acknowledged without calling Wit.
@@ -196,6 +205,30 @@ class TestMessenger(unittest.TestCase):
                      'message': {'mid': 'mid-1', 'text': 'first'}},
                     {'sender': {'id': 'user-1'},
                      'message': {'mid': 'mid-1', 'text': 'first'}},
+                    {'sender': {'id': 'user-2'},
+                     'message': {'mid': 'mid-2', 'text': 'second'}},
+                ]}]}
+
+        calls = []
+        original_client = messenger.client
+        messenger.client = mock.Mock(
+            run_actions=lambda session_id, message: calls.append((session_id, message)))
+        try:
+            response = self.post_signed_json(data)
+        finally:
+            messenger.client = original_client
+
+        self.assertEqual(response.status_int, 200)
+        self.assertEqual(calls, [('user-1', 'first'), ('user-2', 'second')])
+
+    def test_facebook_duplicate_ids_do_not_exhaust_batch_limit(self):
+        duplicate_events = [
+            {'sender': {'id': 'user-1'},
+             'message': {'mid': 'mid-1', 'text': 'first'}}
+            for _index in range(messenger.MAX_MESSENGER_MESSAGES_PER_WEBHOOK)
+        ]
+        data = {'object': 'page',
+                'entry': [{'messaging': duplicate_events + [
                     {'sender': {'id': 'user-2'},
                      'message': {'mid': 'mid-2', 'text': 'second'}},
                 ]}]}
@@ -432,6 +465,26 @@ class TestMessenger(unittest.TestCase):
 
         self.assertEqual(str(raised.exception), 'Wit response was invalid.')
 
+    def test_wit_rejects_every_non_200_status_without_reason_dependency(self):
+        for status_code in (199, 201, 503):
+            with self.subTest(status_code=status_code):
+                fake_response = mock.Mock(status_code=status_code, reason=None)
+
+                with mock.patch.object(
+                        wit.requests, 'request', return_value=fake_response):
+                    with self.assertRaises(wit.WitError) as raised:
+                        wit.req(
+                            logging.getLogger('test'),
+                            'secret-token',
+                            'GET',
+                            '/message',
+                            {})
+
+                self.assertEqual(
+                    str(raised.exception),
+                    'Wit responded with status: {0}.'.format(status_code))
+                fake_response.json.assert_not_called()
+
     def test_wit_provider_error_does_not_expose_response_details(self):
         fake_response = mock.Mock(status_code=200)
         fake_response.json.return_value = {
@@ -590,6 +643,15 @@ class TestMessenger(unittest.TestCase):
         self.assertTrue(len(weather) >= 1)
         self.assertEqual(calls[0][1]['params']['q'], self.location)
         self.assertEqual(calls[0][1]['timeout'], messenger.REQUEST_TIMEOUT)
+
+    def test_weather_rejects_non_text_condition(self):
+        fake_response = mock.Mock()
+        fake_response.json.return_value = {
+            'weather': [{'main': {'unexpected': 'shape'}}],
+        }
+
+        with mock.patch.object(messenger.requests, 'get', return_value=fake_response):
+            self.assertIsNone(messenger.get_weather(self.location))
 
     def test_wit_entity_values_are_normalized(self):
         malformed_values = [
