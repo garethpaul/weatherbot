@@ -101,6 +101,9 @@ def messenger_webhook():
     A webhook to return a challenge
     """
     response.content_type = 'text/plain; charset=UTF-8'
+    response.set_header('X-Content-Type-Options', 'nosniff')
+    response.set_header(
+        'Content-Security-Policy', "default-src 'none'; sandbox")
     if request.query.get('hub.mode') != 'subscribe':
         response.status = 400
         return 'Invalid verification mode'
