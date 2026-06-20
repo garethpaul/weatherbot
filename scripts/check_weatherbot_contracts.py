@@ -1420,6 +1420,11 @@ def test_provider_setup_guide_is_auditable():
 
 
 def test_runtime_dependencies_and_ci_are_pinned():
+    agent_guidance = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    assert_true(
+        "python3 -m pip install -r requirements.txt -r test-requirements.txt" in agent_guidance,
+        "agent setup guidance must install runtime and test dependencies",
+    )
     gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
     for pattern in ["!.github/", "!.github/workflows/", "!.github/workflows/*.yml"]:
         assert_true(pattern in gitignore, "workflow ignore exception: " + pattern)
