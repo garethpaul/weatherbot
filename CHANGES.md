@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-06-20
+
+- Corrected the agent setup command to install the pinned WebTest dependency
+  required by `make check`.
+- Added a regression contract that keeps agent guidance aligned with the
+  runtime and test dependency manifests.
+
 ## 2026-06-19
 
 - Added anti-sniff and restrictive content-security headers to the exact

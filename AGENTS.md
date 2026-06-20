@@ -14,7 +14,7 @@
 
 ## Development commands
 
-- Install dependencies: `python3 -m pip install -r requirements.txt`
+- Install dependencies: `python3 -m pip install -r requirements.txt -r test-requirements.txt`
 - Full baseline: `make check`
 - Combined verification: `make verify`
 - Lint/static checks: `make lint`
