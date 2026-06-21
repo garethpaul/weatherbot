@@ -12,7 +12,9 @@ This README is based on the checked-in source, manifests, scripts, and repositor
 ## Repository Contents
 
 - `README.md` - project overview and local usage notes
-- `requirements.txt` - Python dependency or packaging metadata
+- `requirements.txt` and `test-requirements.txt` - reviewable direct pins
+- `requirements-py310.lock`, `requirements-py312.lock`, and
+  `requirements-py314.lock` - complete SHA-256-locked dependency graphs
 - `Procfile`
 - `SECURITY.md` - security reporting and disclosure guidance
 - `VISION.md` - project direction and maintenance guardrails
@@ -37,8 +39,11 @@ Additional scan context:
 ```bash
 git clone https://github.com/garethpaul/weatherbot.git
 cd weatherbot
-python -m pip install -r requirements.txt -r test-requirements.txt
+python -m pip install --require-hashes -r requirements-py314.lock
 ```
+
+Use `requirements-py310.lock` or `requirements-py312.lock` instead when the
+active interpreter is Python 3.10 or 3.12.
 
 The setup commands above are derived from repository files. Legacy mobile, Python, or JavaScript samples may require older SDKs or package versions than a modern workstation uses by default.
 
@@ -59,7 +64,10 @@ The setup commands above are derived from repository files. Legacy mobile, Pytho
 - Completed maintenance plans live under `docs/plans` and are checked by
   `make check`.
 - `python -m unittest test_messenger` runs the Bottle/WebTest route suite.
-- GitHub Actions installs the pinned runtime/test dependencies and runs
+- `make lock` regenerates reviewed Python 3.10, 3.12, and 3.14 Linux lockfiles
+  from the three direct pins in `requirements.txt` and
+  `test-requirements.txt`.
+- GitHub Actions installs the matrix-matched hash-locked dependency graph and runs
   `make check` on Python 3.10, 3.12, and 3.14 on Ubuntu 24.04 with read-only
   permissions and cancellation for superseded runs.
 

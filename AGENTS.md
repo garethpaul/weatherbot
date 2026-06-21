@@ -10,16 +10,19 @@
 - `scripts` - baseline checks and helper scripts
 - `docs` - plans, notes, and generated README assets
 - `requirements.txt` - Python runtime dependencies
+- `requirements-py310.lock`, `requirements-py312.lock`, and
+  `requirements-py314.lock` - hash-locked runtime and test dependency graphs
 - `screenshots` - repository source or sample assets
 
 ## Development commands
 
-- Install dependencies: `python3 -m pip install -r requirements.txt -r test-requirements.txt`
+- Install dependencies (Python 3.14): `python3 -m pip install --require-hashes -r requirements-py314.lock`
 - Full baseline: `make check`
 - Combined verification: `make verify`
 - Lint/static checks: `make lint`
 - Tests: `make test`
 - Build: `make build`
+- Regenerate lockfiles: `make lock`
 - If a command above skips because a platform toolchain is missing, verify on a machine with that SDK before claiming platform behavior is tested.
 
 ## Coding conventions
