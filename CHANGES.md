@@ -1,5 +1,11 @@
 # Changes
 
+## 2026-06-21
+
+- Bound checkout credential isolation to the only immutable checkout step and
+  added hostile contract mutations for missing, writable, decoy-only,
+  duplicate, and additional-checkout settings.
+
 ## 2026-06-20
 
 - Corrected the agent setup command to install the pinned WebTest dependency
