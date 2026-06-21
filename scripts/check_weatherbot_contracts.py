@@ -1454,6 +1454,7 @@ def test_runtime_dependencies_and_ci_are_pinned():
         'python-version: ["3.10", "3.12", "3.14"]',
         "workflow_dispatch:",
         "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10",
+        "persist-credentials: false",
         "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405",
         "python -m pip install --requirement requirements.txt --requirement test-requirements.txt",
         "run: make check",
