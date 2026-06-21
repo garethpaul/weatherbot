@@ -14,6 +14,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+CHECKOUT_CREDENTIAL_ISOLATION_BLOCK = """      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false"""
 WEBHOOK_API_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-08-weatherbot-webhook-api-hardening.md"
 VERIFY_TOKEN_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-08-weatherbot-verify-token-fails-closed.md"
 WIT_ENTITY_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-08-weatherbot-wit-entity-shape.md"
@@ -255,6 +260,30 @@ def assert_equal(actual, expected, label):
 def assert_true(condition, label):
     if not condition:
         raise AssertionError(label)
+
+
+def checkout_credentials_are_isolated(workflow):
+    return workflow.count(CHECKOUT_CREDENTIAL_ISOLATION_BLOCK) == 1
+
+
+def test_checkout_credentials_are_isolated():
+    canonical = CHECKOUT_CREDENTIAL_ISOLATION_BLOCK
+    assert_true(checkout_credentials_are_isolated(canonical), "canonical checkout isolation")
+    assert_true(
+        not checkout_credentials_are_isolated(canonical.replace("false", "true")),
+        "writable checkout credentials must be rejected",
+    )
+    assert_true(
+        not checkout_credentials_are_isolated(canonical.replace("        with:\n", "")),
+        "missing checkout with block must be rejected",
+    )
+    assert_true(
+        not checkout_credentials_are_isolated(
+            canonical.replace("          persist-credentials: false", "")
+            + "\n      - run: echo 'persist-credentials: false'"
+        ),
+        "credential-isolation text outside checkout must be rejected",
+    )
 
 
 def test_messenger_post_rejects_invalid_json_shape():
@@ -1445,6 +1474,10 @@ def test_runtime_dependencies_and_ci_are_pinned():
     )
     assert_true(not (ROOT / "runtime.txt").exists(), "deprecated runtime.txt must remain removed")
     workflow = (ROOT / ".github" / "workflows" / "check.yml").read_text(encoding="utf-8")
+    assert_true(
+        checkout_credentials_are_isolated(workflow),
+        "checkout must disable persisted credentials exactly once",
+    )
     for contract in [
         "permissions:\n  contents: read",
         "concurrency:",
@@ -1454,7 +1487,6 @@ def test_runtime_dependencies_and_ci_are_pinned():
         'python-version: ["3.10", "3.12", "3.14"]',
         "workflow_dispatch:",
         "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10",
-        "persist-credentials: false",
         "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405",
         "python -m pip install --requirement requirements.txt --requirement test-requirements.txt",
         "run: make check",
@@ -1571,6 +1603,7 @@ def test_messenger_post_rejects_non_json_content_types_before_authentication():
 
 def main():
     tests = [
+        test_checkout_credentials_are_isolated,
         test_messenger_post_rejects_oversized_declared_body,
         test_messenger_post_rejects_oversized_streamed_body,
         test_messenger_post_accepts_json_content_type_parameters,

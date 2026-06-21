@@ -98,6 +98,7 @@ When the required SDK or runtime is unavailable, use static checks and source re
 
 ## Security and Privacy Notes
 
+- Hosted verification checks out source without persisting Git credentials.
 - Review changes touching authentication or token handling; examples from the scan include messenger.py, wit.py.
 - Review changes touching external API calls or credential-adjacent configuration; examples from the scan include messenger.py, wit.py.
 - Review changes touching network requests, sockets, or service endpoints; examples from the scan include messenger.py, wit.py.
