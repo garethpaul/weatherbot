@@ -1569,6 +1569,7 @@ def test_runtime_dependencies_and_ci_are_pinned():
         "concurrency:",
         "cancel-in-progress: true",
         "runs-on: ubuntu-24.04",
+        "name: verify (${{ matrix.python-version }})",
         "timeout-minutes: 10",
         "workflow_dispatch:",
         "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10",
