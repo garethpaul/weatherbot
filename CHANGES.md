@@ -2,8 +2,9 @@
 
 ## 2026-06-21
 
-- Bound checkout credential isolation to the immutable checkout step and added
-  hostile contract mutations for missing, writable, and decoy-only settings.
+- Bound checkout credential isolation to the only immutable checkout step and
+  added hostile contract mutations for missing, writable, decoy-only,
+  duplicate, and additional-checkout settings.
 
 ## 2026-06-20
 

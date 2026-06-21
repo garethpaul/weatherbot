@@ -14,11 +14,13 @@ impact of a compromised dependency or test process.
 - Set `persist-credentials: false` on the immutable-pinned checkout step.
 - Bind the setting to the checkout step in the dependency-free repository
   contract.
-- Reject missing, writable, and decoy-only credential settings.
+- Reject missing, writable, decoy-only, duplicate, and additional-checkout
+  credential settings.
 
 ## Verification Results
 
 - The full pinned `make check` gate passed from the repository root and an
   external working directory.
-- The checkout-isolation contract rejected all three hostile mutations.
+- The checkout-isolation contract rejected all five hostile mutations,
+  including a second checkout and a duplicate key that could override `false`.
 - No provider credential was loaded and no live provider request was sent.

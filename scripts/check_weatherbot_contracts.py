@@ -19,6 +19,8 @@ CHECKOUT_CREDENTIAL_ISOLATION_BLOCK = """      - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false"""
+CHECKOUT_ACTION_REFERENCE = "actions/checkout@"
+CHECKOUT_CREDENTIAL_SETTING = "persist-credentials:"
 WEBHOOK_API_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-08-weatherbot-webhook-api-hardening.md"
 VERIFY_TOKEN_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-08-weatherbot-verify-token-fails-closed.md"
 WIT_ENTITY_PLAN_PATH = ROOT / "docs" / "plans" / "2026-06-08-weatherbot-wit-entity-shape.md"
@@ -263,7 +265,11 @@ def assert_true(condition, label):
 
 
 def checkout_credentials_are_isolated(workflow):
-    return workflow.count(CHECKOUT_CREDENTIAL_ISOLATION_BLOCK) == 1
+    return (
+        workflow.count(CHECKOUT_CREDENTIAL_ISOLATION_BLOCK) == 1
+        and workflow.count(CHECKOUT_ACTION_REFERENCE) == 1
+        and workflow.count(CHECKOUT_CREDENTIAL_SETTING) == 1
+    )
 
 
 def test_checkout_credentials_are_isolated():
@@ -283,6 +289,24 @@ def test_checkout_credentials_are_isolated():
             + "\n      - run: echo 'persist-credentials: false'"
         ),
         "credential-isolation text outside checkout must be rejected",
+    )
+    assert_true(
+        not checkout_credentials_are_isolated(
+            canonical
+            + "\n      - uses: actions/checkout@"
+            + "df4cb1c069e1874edd31b4311f1884172cec0e10"
+        ),
+        "a second checkout without isolation must be rejected",
+    )
+    assert_true(
+        not checkout_credentials_are_isolated(
+            canonical.replace(
+                "          persist-credentials: false",
+                "          persist-credentials: false\n"
+                "          persist-credentials: true",
+            )
+        ),
+        "duplicate credential settings must be rejected",
     )
 
 
