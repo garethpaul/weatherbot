@@ -5,6 +5,9 @@
 - Bound checkout credential isolation to the only immutable checkout step and
   added hostile contract mutations for missing, writable, decoy-only,
   duplicate, and additional-checkout settings.
+- Added complete SHA-256-locked Python 3.10, 3.12, and 3.14 dependency graphs,
+  bound hosted installs to the matrix-matched lockfile, and added deterministic
+  lock regeneration and integrity contracts.
 
 ## 2026-06-20
 
