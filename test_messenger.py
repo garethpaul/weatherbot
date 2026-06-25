@@ -501,6 +501,23 @@ class TestMessenger(unittest.TestCase):
 
         self.assertEqual(str(raised.exception), 'Wit responded with an error.')
 
+    def test_wit_action_debug_logs_do_not_expose_context_values(self):
+        logger = logging.getLogger('test.wit.context-privacy')
+        client = wit.Wit('test-token', actions={'send': mock.Mock()}, logger=logger)
+        client.converse = lambda *_args, **_kwargs: {'type': 'stop'}
+
+        with self.assertLogs(logger, level='DEBUG') as captured:
+            client.run_actions(
+                self.user_id,
+                'weather',
+                context={'location': 'Private Home Address'},
+            )
+
+        log_output = '\n'.join(captured.output)
+        self.assertNotIn('Private Home Address', log_output)
+        self.assertNotIn("'location'", log_output)
+        self.assertIn('Response type: stop', log_output)
+
     def test_wit_message_reply_remains_json_serializable_unicode(self):
         sent = []
         responses = iter([

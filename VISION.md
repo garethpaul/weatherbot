@@ -36,7 +36,8 @@ Priority:
 - Send stable retry-later text when a known-location forecast is unavailable
 - Keep outbound request timeout configuration bounded and non-crashing
 - Keep Bottle debug mode disabled unless explicitly enabled locally
-- Avoid debug logging user messages, entities, or Wit response payloads
+- Avoid debug logging user messages, entities, Wit response payloads, or action
+  context values such as locations and forecast state
 - Keep provider credential ownership, HTTPS webhook wiring, and redacted
   verification evidence explicit
 - Verified support covers Python 3.10, 3.12, and 3.14 with Bottle 0.13.4, Requests 2.34.2, and WebTest 3.0.7 pinned exactly.

@@ -36,6 +36,9 @@ MESSENGER_SENDER_PLAN_PATH = (
 WIT_LOG_PRIVACY_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-09-weatherbot-wit-log-privacy.md"
 )
+WIT_CONTEXT_LOG_PRIVACY_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-25-wit-context-log-privacy.md"
+)
 WEATHER_EXCEPTION_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-09-weatherbot-weather-exception-fallback.md"
 )
@@ -1239,6 +1242,7 @@ def test_wit_message_replies_reject_invalid_text():
 
 def test_wit_debug_logs_avoid_message_payloads():
     source = (ROOT / "wit.py").read_text()
+    runtime_tests = (ROOT / "test_messenger.py").read_text()
     assert_true(
         "logger.debug('%s %s %s', meth, full_url, params)" not in source,
         "Wit request debug logs must not include request params",
@@ -1254,6 +1258,14 @@ def test_wit_debug_logs_avoid_message_payloads():
     assert_true(
         "logger.debug('%s %s response received', meth, full_url)" in source,
         "Wit response debug logging may keep method and endpoint only",
+    )
+    assert_true(
+        "self.logger.debug('Context: %s', context)" not in source,
+        "Wit action debug logs must not include context payloads",
+    )
+    assert_true(
+        "test_wit_action_debug_logs_do_not_expose_context_values" in runtime_tests,
+        "runtime tests must cover Wit action context log privacy",
     )
 
 
@@ -1412,6 +1424,10 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(MESSENGER_TEXT_PLAN_PATH, "weatherbot Messenger text normalization")
     assert_completed_plan(MESSENGER_SENDER_PLAN_PATH, "weatherbot Messenger sender normalization")
     assert_completed_plan(WIT_LOG_PRIVACY_PLAN_PATH, "weatherbot Wit log privacy")
+    assert_completed_plan(
+        WIT_CONTEXT_LOG_PRIVACY_PLAN_PATH,
+        "weatherbot Wit action context log privacy",
+    )
     assert_completed_plan(WEATHER_EXCEPTION_PLAN_PATH, "weatherbot weather exception fallback")
     assert_completed_plan(MESSENGER_OBJECT_PLAN_PATH, "weatherbot Messenger object guard")
     assert_completed_plan(PYTHON3_CI_PLAN_PATH, "weatherbot Python 3 and CI")

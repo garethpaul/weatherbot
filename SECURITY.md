@@ -70,7 +70,8 @@ echoing caller-controlled challenge text.
 Expected Wit transport and response failures are isolated to the affected
 event so they do not force retries of an authenticated Messenger batch after
 earlier replies may have been sent. Public errors and logs must not include
-tokens, sender IDs, message text, request URLs, or provider response bodies.
+tokens, sender IDs, message text, request URLs, provider response bodies, or
+Wit action context values such as user locations and forecast state.
 Wit message replies must remain normalized Unicode text before Messenger JSON
 serialization; missing, non-text, and blank provider replies fail closed with
 the same stable error.

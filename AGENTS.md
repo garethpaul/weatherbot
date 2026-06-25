@@ -52,6 +52,7 @@
 - `OPEN_WEATHER_TOKEN` configures OpenWeather lookup.
 - `REQUEST_TIMEOUT` optionally overrides outbound request timeout seconds; invalid, non-finite, or non-positive values fall back to `5.0`.
 - `WEATHERBOT_DEBUG=1` enables Bottle debug mode for local development; it is disabled by default.
+- Wit debug logs must not include action context values, which can contain user locations and forecast state.
 
 ## Agent workflow
 
