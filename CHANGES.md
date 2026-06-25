@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-06-25 07:07 PDT
+
+- Removed the legacy Wit action-context debug log that exposed user location
+  and forecast state during troubleshooting.
+- Preserved response-type diagnostics and added behavioral plus dependency-free
+  contracts proving action context values stay out of debug output.
+
 ## 2026-06-21
 
 - Bound checkout credential isolation to the only immutable checkout step and

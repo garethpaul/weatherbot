@@ -103,6 +103,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   invalid, non-finite, or non-positive values fall back to `5.0`.
 - `WEATHERBOT_DEBUG=1` enables Bottle debug mode for local development; it is
   disabled by default.
+- Wit debug traces retain endpoint and response-type diagnostics without
+  logging action context values such as user locations or forecast state.
 
 ## Security and Privacy Notes
 
@@ -139,6 +141,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   rejecting non-page Messenger webhook payloads before Wit calls.
 - See `docs/plans/2026-06-09-weatherbot-wit-log-privacy.md` for Wit request
   and response debug log privacy coverage.
+- See `docs/plans/2026-06-25-wit-context-log-privacy.md` for action-context
+  privacy coverage that keeps user locations and forecast state out of logs.
 - See `docs/plans/2026-06-10-python3-runtime-and-ci.md` for the Python 3
   dependency, route-test, and hosted verification baseline.
 - See `docs/plans/2026-06-10-messenger-webhook-size-limit.md` for the completed

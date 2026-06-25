@@ -128,7 +128,6 @@ class Wit:
         if 'type' not in json:
             raise WitError('Couldn\'t find type in Wit response')
 
-        self.logger.debug('Context: %s', context)
         self.logger.debug('Response type: %s', json['type'])
 
         # backwards-cpmpatibility with API version 20160516
