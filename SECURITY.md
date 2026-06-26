@@ -52,7 +52,9 @@ Messenger provider HTTP errors propagate through the Wit action and release
 the current message-ID claim so a later webhook delivery can retry the reply.
 OpenWeather failures for a known location produce a stable user-facing
 retry-later message. Provider exception text and stale Wit forecast copy are
-not forwarded to the Messenger user.
+not forwarded to the Messenger user. Only request, HTTP-status, and
+provider-controlled response-parser failures are translated into that fallback;
+unexpected application defects propagate through the existing retry path.
 Each signed webhook processes at most 20 valid Messenger user messages in
 payload order. Malformed nested sender or message values are ignored without
 preventing later valid events from reaching Wit.

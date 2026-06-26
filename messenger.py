@@ -44,6 +44,10 @@ WEATHER_UNAVAILABLE_MESSAGE = (
 )
 
 
+class WeatherProviderError(Exception):
+    pass
+
+
 def positive_float_from_env(name, default):
     try:
         value = float(os.environ.get(name, default))
@@ -285,9 +289,15 @@ def fb_message(sender_id, text):
 
 def get_weather(text):
     qs = {'q': text, 'appid': OPEN_WEATHER_TOKEN}
-    resp = requests.get(OPEN_WEATHER_URL, params=qs, timeout=REQUEST_TIMEOUT)
-    resp.raise_for_status()
-    data = resp.json()
+    try:
+        resp = requests.get(OPEN_WEATHER_URL, params=qs, timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+    except requests.RequestException as error:
+        raise WeatherProviderError('Weather provider request failed.') from error
+    try:
+        data = resp.json()
+    except (requests.RequestException, ValueError, RecursionError) as error:
+        raise WeatherProviderError('Weather provider response was invalid.') from error
     if not isinstance(data, dict):
         return None
     weather = data.get('weather')
@@ -343,7 +353,7 @@ def get_forecast(request):
         # This is where we could use a weather service api to get the weather.
         try:
             conditions = get_weather(loc)
-        except Exception:
+        except WeatherProviderError:
             conditions = None
         if conditions:
             context['forecast'] = conditions

@@ -1,5 +1,26 @@
 # Changes
 
+## 2026-06-25T18:24:50-0700 — P1 correctness — cycle: weather provider exception boundary
+
+- Cycle: inspected public open work, landed the clean iHeartRating accessibility
+  PR, then reviewed Weatherbot's documented broad OpenWeather exception risk.
+- Threads: four investigators traced request/parser exceptions, history, webhook
+  retry behavior, and adversarial JSON parsing edge cases.
+- Bug: `get_forecast` caught every `Exception` from `get_weather`, so programming
+  defects were silently converted into ordinary missing forecasts.
+- Work: introduced `WeatherProviderError`, translated only Requests and
+  provider-controlled JSON parser failures at `get_weather`, and catch only the
+  domain error in `get_forecast`.
+- Files: changed messenger runtime, executable and dependency-free tests,
+  README, SECURITY, VISION, this log, and the completed boundary plan.
+- Validation: RED proved `RuntimeError` was swallowed. Canonical and external-root
+  `make check` pass with 61 contracts and 42 runtime tests, `pip check` passes,
+  and four hostile boundary mutations are rejected.
+- Findings: pinned Requests wraps normal JSON syntax errors, but supported Python
+  parsers can still raise plain `ValueError` or `RecursionError` for hostile data.
+- Blockers: no live provider calls are needed; hosted Python matrices remain authoritative.
+- Next: complete independent review, exact-head Codex review, hosted CI, and merge.
+
 ## 2026-06-25 07:07 PDT
 
 - Removed the legacy Wit action-context debug log that exposed user location
