@@ -92,6 +92,9 @@ When the required SDK or runtime is unavailable, use static checks and source re
   serialization; missing, non-text, and blank replies fail with a stable error.
 - Known-location weather lookup failures send a stable retry-later message
   instead of forwarding stale Wit forecast text or provider details.
+- OpenWeather request, status, and response-parser failures are translated at
+  the provider boundary; unexpected application defects remain visible to the
+  webhook retry path.
 - Recent non-empty Messenger message IDs are claimed in a bounded process-local
   cache so retries do not repeat Wit actions; failed actions release claims.
 - Unsuccessful Messenger provider HTTP responses raise before reply content is
@@ -128,7 +131,9 @@ When the required SDK or runtime is unavailable, use static checks and source re
 - See `docs/plans/2026-06-09-weatherbot-weather-result-shape.md` for malformed
   OpenWeather result handling.
 - See `docs/plans/2026-06-09-weatherbot-weather-exception-fallback.md` for
-  treating OpenWeather lookup exceptions as missing forecasts.
+  the historical OpenWeather exception fallback.
+- See `docs/plans/2026-06-25-weather-provider-error-boundary.md` for the current
+  provider-error translation and unexpected-error propagation contract.
 - See `docs/plans/2026-06-09-weatherbot-request-timeout.md` for bounded
   request timeout environment parsing.
 - See `docs/plans/2026-06-09-weatherbot-debug-mode.md` for the opt-in Bottle

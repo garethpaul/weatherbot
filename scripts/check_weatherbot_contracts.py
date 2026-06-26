@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Dependency-free route and API contract checks for weatherbot."""
+import ast
 import importlib.util
 import hashlib
 import hmac
@@ -95,6 +96,9 @@ WIT_REPLY_TEXT_PLAN_PATH = (
 HASH_LOCK_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-21-hash-locked-dependencies.md"
 )
+WEATHER_PROVIDER_ERROR_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-25-weather-provider-error-boundary.md"
+)
 LOCKFILE_SHA256 = {
     "requirements-py310.lock": "405109f01e835dc46268965b976844fa4d3cc12bf3332a0ecd2c49142f4e0faf",
     "requirements-py312.lock": "405109f01e835dc46268965b976844fa4d3cc12bf3332a0ecd2c49142f4e0faf",
@@ -163,7 +167,13 @@ class FakeHTTPResponse:
             raise self._error
 
 
+class FakeRequestException(Exception):
+    pass
+
+
 class FakeRequests(types.SimpleNamespace):
+    RequestException = FakeRequestException
+
     def __init__(self):
         super(FakeRequests, self).__init__()
         self.calls = []
@@ -1386,12 +1396,12 @@ def test_get_forecast_handles_malformed_weather_results():
 
 
 def test_get_forecast_handles_weather_lookup_exceptions():
-    messenger, _request, _response, _requests, _calls = load_messenger()
+    messenger, _request, _response, requests, _calls = load_messenger()
     context = {"forecast": "Rain", "missingLocation": True}
     original_get_weather = messenger.get_weather
 
     def raise_lookup_error(_location):
-        raise RuntimeError("weather lookup failed")
+        raise messenger.WeatherProviderError("weather lookup failed") from requests.RequestException()
 
     messenger.get_weather = raise_lookup_error
     try:
@@ -1405,6 +1415,86 @@ def test_get_forecast_handles_weather_lookup_exceptions():
     assert_equal(result.get("missingForecast"), True, "weather lookup exceptions set missingForecast")
     assert_true("forecast" not in result, "weather lookup exceptions must clear stale forecast")
     assert_true("missingLocation" not in result, "known location must clear stale missingLocation")
+
+
+def test_get_forecast_propagates_unexpected_weather_errors():
+    messenger, _request, _response, _requests, _calls = load_messenger()
+    original_get_weather = messenger.get_weather
+
+    def raise_programming_error(_location):
+        raise RuntimeError("programming defect")
+
+    messenger.get_weather = raise_programming_error
+    try:
+        try:
+            messenger.get_forecast({
+                "context": {},
+                "entities": {"location": [{"value": "Yountville"}]},
+            })
+        except RuntimeError as error:
+            assert_equal(str(error), "programming defect", "unexpected weather error")
+        else:
+            raise AssertionError("unexpected weather errors must propagate")
+    finally:
+        messenger.get_weather = original_get_weather
+
+    source = (ROOT / "messenger.py").read_text(encoding="utf-8")
+    forecast_source = source[source.index("def get_forecast"):source.index("# Setup Actions")]
+    assert_true(
+        "except WeatherProviderError:" in forecast_source
+        and "except Exception" not in forecast_source,
+        "forecast fallback must catch only translated weather provider errors",
+    )
+
+
+def test_weather_provider_translation_uses_exact_exception_boundaries():
+    tree = ast.parse((ROOT / "messenger.py").read_text(encoding="utf-8"))
+    get_weather = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "get_weather"
+    )
+    try_nodes = [node for node in get_weather.body if isinstance(node, ast.Try)]
+    assert_equal(len(try_nodes), 2, "weather provider translation try blocks")
+
+    request_handler = try_nodes[0].handlers
+    assert_equal(len(request_handler), 1, "weather request exception handlers")
+    request_type = request_handler[0].type
+    assert_true(
+        isinstance(request_type, ast.Attribute)
+        and isinstance(request_type.value, ast.Name)
+        and request_type.value.id == "requests"
+        and request_type.attr == "RequestException",
+        "weather request/status translation must catch only requests.RequestException",
+    )
+
+    parser_handler = try_nodes[1].handlers
+    assert_equal(len(parser_handler), 1, "weather parser exception handlers")
+    parser_type = parser_handler[0].type
+    assert_true(isinstance(parser_type, ast.Tuple), "weather parser boundary must use an exact tuple")
+    parser_names = []
+    for item in parser_type.elts:
+        if isinstance(item, ast.Name):
+            parser_names.append(item.id)
+        elif isinstance(item, ast.Attribute) and isinstance(item.value, ast.Name):
+            parser_names.append(item.value.id + "." + item.attr)
+    assert_equal(
+        parser_names,
+        ["requests.RequestException", "ValueError", "RecursionError"],
+        "weather parser exception boundary",
+    )
+
+    for handler in (request_handler[0], parser_handler[0]):
+        raises = [node for node in handler.body if isinstance(node, ast.Raise)]
+        assert_equal(len(raises), 1, "weather provider handler raise count")
+        raised = raises[0]
+        assert_true(
+            isinstance(raised.exc, ast.Call)
+            and isinstance(raised.exc.func, ast.Name)
+            and raised.exc.func.id == "WeatherProviderError"
+            and isinstance(raised.cause, ast.Name)
+            and raised.cause.id == "error",
+            "weather provider failures must raise WeatherProviderError with chaining",
+        )
 
 
 def assert_completed_plan(path, label):
@@ -1448,6 +1538,10 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(MESSENGER_VERIFICATION_MODE_PLAN_PATH, "weatherbot Messenger verification mode")
     assert_completed_plan(WIT_REPLY_TEXT_PLAN_PATH, "weatherbot Wit reply text normalization")
     assert_completed_plan(HASH_LOCK_PLAN_PATH, "weatherbot hash-locked dependencies")
+    assert_completed_plan(
+        WEATHER_PROVIDER_ERROR_PLAN_PATH,
+        "weatherbot weather provider error boundary",
+    )
     checker_main = Path(__file__).read_text().rsplit("def main():", 1)[1]
     assert_true(
         "test_provider_setup_guide_is_auditable," in checker_main,
@@ -1806,6 +1900,8 @@ def main():
         test_get_forecast_handles_missing_entities,
         test_get_forecast_handles_malformed_weather_results,
         test_get_forecast_handles_weather_lookup_exceptions,
+        test_get_forecast_propagates_unexpected_weather_errors,
+        test_weather_provider_translation_uses_exact_exception_boundaries,
         test_completed_plans_are_in_docs_plans,
         test_provider_setup_guide_is_auditable,
         test_supported_python_dependency_graphs_are_hash_locked,

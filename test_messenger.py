@@ -694,6 +694,77 @@ class TestMessenger(unittest.TestCase):
                 {'location': [{'value': {'value': '  Napa  '}}]}, 'location'),
             'Napa')
 
+    def test_get_forecast_treats_weather_provider_errors_as_missing(self):
+        request = {
+            'context': {'forecast': 'Rain', 'missingLocation': True},
+            'entities': {'location': [{'value': 'Yountville'}]},
+        }
+
+        with mock.patch.object(
+                messenger,
+                'get_weather',
+                side_effect=messenger.WeatherProviderError('provider failed')):
+            result = messenger.get_forecast(request)
+
+        self.assertIs(result['missingForecast'], True)
+        self.assertNotIn('forecast', result)
+        self.assertNotIn('missingLocation', result)
+
+    def test_get_forecast_propagates_unexpected_weather_errors(self):
+        request = {
+            'context': {},
+            'entities': {'location': [{'value': 'Yountville'}]},
+        }
+
+        with mock.patch.object(
+                messenger,
+                'get_weather',
+                side_effect=RuntimeError('programming defect')):
+            with self.assertRaisesRegex(RuntimeError, 'programming defect'):
+                messenger.get_forecast(request)
+
+    def test_get_weather_wraps_expected_provider_failures(self):
+        failures = [
+            messenger.requests.RequestException('transport failed'),
+            ValueError('provider integer is too large'),
+            RecursionError('provider JSON is too deeply nested'),
+        ]
+
+        for failure in failures:
+            with self.subTest(failure=type(failure).__name__):
+                response = mock.Mock()
+                response.raise_for_status.return_value = None
+                response.json.side_effect = failure
+                with mock.patch.object(messenger.requests, 'get', return_value=response):
+                    with self.assertRaises(messenger.WeatherProviderError) as raised:
+                        messenger.get_weather('Yountville')
+                self.assertIs(raised.exception.__cause__, failure)
+
+        transport_error = messenger.requests.RequestException('request failed')
+        with mock.patch.object(messenger.requests, 'get', side_effect=transport_error):
+            with self.assertRaises(messenger.WeatherProviderError) as raised:
+                messenger.get_weather('Yountville')
+        self.assertIs(raised.exception.__cause__, transport_error)
+        self.assertEqual(str(raised.exception), 'Weather provider request failed.')
+
+        status_error = messenger.requests.HTTPError('status failed')
+        response = mock.Mock()
+        response.raise_for_status.side_effect = status_error
+        with mock.patch.object(messenger.requests, 'get', return_value=response):
+            with self.assertRaises(messenger.WeatherProviderError) as raised:
+                messenger.get_weather('Yountville')
+        self.assertIs(raised.exception.__cause__, status_error)
+        self.assertEqual(str(raised.exception), 'Weather provider request failed.')
+
+    def test_get_weather_propagates_unexpected_parser_errors(self):
+        response = mock.Mock()
+        response.raise_for_status.return_value = None
+        response.json.side_effect = RuntimeError('parser programming defect')
+
+        with mock.patch.object(messenger.requests, 'get', return_value=response):
+            with self.assertRaisesRegex(RuntimeError, 'parser programming defect'):
+                messenger.get_weather('Yountville')
+
 
 if __name__ == '__main__':
     unittest.main()
