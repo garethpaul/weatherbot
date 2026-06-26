@@ -92,6 +92,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   serialization; missing, non-text, and blank replies fail with a stable error.
 - Known-location weather lookup failures send a stable retry-later message
   instead of forwarding stale Wit forecast text or provider details.
+- Reject Wit location values longer than 256 characters before OpenWeather lookup
+  so provider query size remains bounded and stale forecast state is cleared.
 - OpenWeather request, status, and response-parser failures are translated at
   the provider boundary; unexpected application defects remain visible to the
   webhook retry path.
@@ -134,6 +136,8 @@ When the required SDK or runtime is unavailable, use static checks and source re
   the historical OpenWeather exception fallback.
 - See `docs/plans/2026-06-25-weather-provider-error-boundary.md` for the current
   provider-error translation and unexpected-error propagation contract.
+- See `docs/plans/2026-06-26-weather-location-length-bound.md` for the
+  normalized location bound enforced before OpenWeather requests.
 - See `docs/plans/2026-06-09-weatherbot-request-timeout.md` for bounded
   request timeout environment parsing.
 - See `docs/plans/2026-06-09-weatherbot-debug-mode.md` for the opt-in Bottle

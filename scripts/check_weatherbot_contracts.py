@@ -99,6 +99,9 @@ HASH_LOCK_PLAN_PATH = (
 WEATHER_PROVIDER_ERROR_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-25-weather-provider-error-boundary.md"
 )
+WEATHER_LOCATION_BOUND_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-26-weather-location-length-bound.md"
+)
 LOCKFILE_SHA256 = {
     "requirements-py310.lock": "405109f01e835dc46268965b976844fa4d3cc12bf3332a0ecd2c49142f4e0faf",
     "requirements-py312.lock": "405109f01e835dc46268965b976844fa4d3cc12bf3332a0ecd2c49142f4e0faf",
@@ -1366,6 +1369,59 @@ def test_first_entity_value_handles_malformed_entities():
     assert_true("test_wit_entity_values_are_normalized" in runtime_tests, "runtime tests must cover Wit entity normalization")
 
 
+def test_weather_location_length_is_bounded_before_provider_calls():
+    messenger, _request, _response, _requests, _calls = load_messenger()
+    accepted = "x" * messenger.MAX_WEATHER_LOCATION_LENGTH
+
+    assert_equal(
+        messenger.clean_weather_location(accepted),
+        accepted,
+        "maximum weather location length",
+    )
+    assert_equal(
+        messenger.clean_weather_location(accepted + "x"),
+        None,
+        "overlong weather location",
+    )
+
+    provider_calls = []
+    messenger.get_weather = lambda location: provider_calls.append(location)
+    context = {"forecast": "Rain", "missingForecast": True}
+    result = messenger.get_forecast({
+        "context": context,
+        "entities": {"location": [{"value": accepted + "x"}]},
+    })
+    assert_equal(provider_calls, [], "overlong location provider calls")
+    assert_equal(result.get("missingLocation"), True, "overlong location state")
+    assert_true("forecast" not in result, "overlong location must clear stale forecast")
+    assert_true("missingForecast" not in result, "overlong location must clear stale provider failure")
+
+    source = (ROOT / "messenger.py").read_text(encoding="utf-8")
+    runtime_tests = (ROOT / "test_messenger.py").read_text(encoding="utf-8")
+    for contract in [
+        "MAX_WEATHER_LOCATION_LENGTH = 256",
+        "def clean_weather_location(value):",
+        "len(value) > MAX_WEATHER_LOCATION_LENGTH",
+        "loc = clean_weather_location(first_entity_value(entities, 'location'))",
+    ]:
+        assert_true(contract in source, "weather location bound contract: " + contract)
+    for test_name in [
+        "test_get_forecast_rejects_overlong_location_before_provider_call",
+        "test_weather_location_length_boundary",
+    ]:
+        assert_true(test_name in runtime_tests, "weather location bound regression: " + test_name)
+
+    documents = {
+        "README.md": "Reject Wit location values longer than 256 characters before OpenWeather lookup",
+        "SECURITY.md": "Wit location values longer than 256 characters",
+        "VISION.md": "Bound normalized Wit locations before OpenWeather requests",
+        "CHANGES.md": "rejects overlong Wit location values before OpenWeather requests",
+    }
+    for relative_path, phrase in documents.items():
+        document = " ".join((ROOT / relative_path).read_text(encoding="utf-8").split())
+        assert_true(phrase in document, relative_path + " must document weather location bounds")
+
+
 def test_get_forecast_handles_missing_entities():
     messenger, _request, _response, _requests, _calls = load_messenger()
     context = {"forecast": "Clear"}
@@ -1541,6 +1597,10 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(
         WEATHER_PROVIDER_ERROR_PLAN_PATH,
         "weatherbot weather provider error boundary",
+    )
+    assert_completed_plan(
+        WEATHER_LOCATION_BOUND_PLAN_PATH,
+        "weatherbot weather location length bound",
     )
     checker_main = Path(__file__).read_text().rsplit("def main():", 1)[1]
     assert_true(
@@ -1897,6 +1957,7 @@ def main():
         test_wit_debug_logs_avoid_message_payloads,
         test_wit_failures_use_stable_public_errors,
         test_first_entity_value_handles_malformed_entities,
+        test_weather_location_length_is_bounded_before_provider_calls,
         test_get_forecast_handles_missing_entities,
         test_get_forecast_handles_malformed_weather_results,
         test_get_forecast_handles_weather_lookup_exceptions,

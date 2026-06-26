@@ -1,5 +1,23 @@
 # Changes
 
+## 2026-06-26T12:07:08Z — P2 resource safety — weather location length bound
+
+- Cycle: refreshed the clean public repository after the provider-error merge
+  and selected an outbound request-size boundary instead of changing provider
+  versions or credential-bound live behavior.
+- Bug: normalized Wit location values had no field-level length limit and could
+  flow directly into OpenWeather request parameters up to the webhook body cap.
+- Work: added a 256-character boundary that rejects overlong Wit location
+  values before OpenWeather requests, treats them as missing, and clears stale
+  forecast state without provider I/O.
+- Tests: red-first proof showed a 257-character value reached `get_weather`;
+  boundary and no-I/O regressions cover the accepted maximum and rejection.
+- Contracts: the dependency-free suite requires source ordering, focused tests,
+  maintained guidance, this changelog evidence, and the completed plan.
+- Validation: 62 dependency-free contracts, 44 runtime tests, root/external
+  Make gates, locked dependency checks, hostile mutations, isolated compilation,
+  bytecode cleanup, and `git diff --check` are recorded in the completed plan.
+
 ## 2026-06-25T18:24:50-0700 — P1 correctness — cycle: weather provider exception boundary
 
 - Cycle: inspected public open work, landed the clean iHeartRating accessibility

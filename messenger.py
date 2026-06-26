@@ -72,6 +72,7 @@ app = Bottle()
 MAX_MESSENGER_WEBHOOK_BYTES = 1024 * 1024
 MAX_RECENT_MESSENGER_MESSAGE_IDS = 1024
 MAX_MESSENGER_MESSAGES_PER_WEBHOOK = 20
+MAX_WEATHER_LOCATION_LENGTH = 256
 
 
 class RecentMessageIds(object):
@@ -269,6 +270,13 @@ def clean_text_value(value):
     return value or None
 
 
+def clean_weather_location(value):
+    value = clean_text_value(value)
+    if value is None or len(value) > MAX_WEATHER_LOCATION_LENGTH:
+        return None
+    return value
+
+
 def fb_message(sender_id, text):
     """
     Function for returning response to messenger
@@ -348,7 +356,7 @@ def send(request, response):
 def get_forecast(request):
     context = request['context']
     entities = request['entities']
-    loc = first_entity_value(entities, 'location')
+    loc = clean_weather_location(first_entity_value(entities, 'location'))
     if loc:
         # This is where we could use a weather service api to get the weather.
         try:

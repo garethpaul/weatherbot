@@ -694,6 +694,26 @@ class TestMessenger(unittest.TestCase):
                 {'location': [{'value': {'value': '  Napa  '}}]}, 'location'),
             'Napa')
 
+    def test_get_forecast_rejects_overlong_location_before_provider_call(self):
+        request = {
+            'context': {'forecast': 'Rain', 'missingForecast': True},
+            'entities': {'location': [{'value': 'x' * 257}]},
+        }
+
+        with mock.patch.object(messenger, 'get_weather') as get_weather:
+            result = messenger.get_forecast(request)
+
+        get_weather.assert_not_called()
+        self.assertIs(result['missingLocation'], True)
+        self.assertNotIn('forecast', result)
+        self.assertNotIn('missingForecast', result)
+
+    def test_weather_location_length_boundary(self):
+        accepted = 'x' * messenger.MAX_WEATHER_LOCATION_LENGTH
+
+        self.assertEqual(accepted, messenger.clean_weather_location(accepted))
+        self.assertIsNone(messenger.clean_weather_location(accepted + 'x'))
+
     def test_get_forecast_treats_weather_provider_errors_as_missing(self):
         request = {
             'context': {'forecast': 'Rain', 'missingLocation': True},
