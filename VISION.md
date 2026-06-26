@@ -31,6 +31,7 @@ Priority:
 - Make weather lookup and response flow easy to trace
 - Treat malformed Wit entities as missing user location
 - Normalize flat and nested Wit location values before weather lookup
+- Bound normalized Wit locations before OpenWeather requests
 - Treat malformed OpenWeather results as missing forecasts
 - Treat translated OpenWeather request and response-parser failures as missing forecasts
 - Let unexpected weather-processing defects reach the webhook retry path
