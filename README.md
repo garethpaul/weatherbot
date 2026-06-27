@@ -97,8 +97,9 @@ When the required SDK or runtime is unavailable, use static checks and source re
 - OpenWeather request, status, and response-parser failures are translated at
   the provider boundary; unexpected application defects remain visible to the
   webhook retry path.
-- Recent non-empty Messenger message IDs are claimed in a bounded process-local
-  cache so retries do not repeat Wit actions; failed actions release claims.
+- Recent non-empty Messenger message IDs use non-evictable in-flight ownership
+  plus bounded completed history so concurrent retries cannot repeat active Wit
+  actions; failed actions release claims for provider retry.
 - Unsuccessful Messenger provider HTTP responses raise before reply content is
   accepted, allowing the current webhook message-ID claim to be retried.
 - Signed Messenger batches process at most 20 valid user messages in payload
@@ -166,6 +167,9 @@ When the required SDK or runtime is unavailable, use static checks and source re
   events without hiding later user messages in the same webhook batch.
 - See `docs/plans/2026-06-13-messenger-message-replay-guard.md` for bounded
   process-local retry suppression and per-message failure recovery.
+- See `docs/plans/2026-06-26-non-evictable-messenger-claims.md` for the split
+  in-flight/completed ownership that prevents active replay claims from aging
+  out of the bounded completed history.
 - See `docs/plans/2026-06-13-messenger-batch-processing-bound.md` for ordered,
   bounded Messenger batch handling and malformed-event isolation.
 - See `docs/plans/2026-06-14-provider-setup-guide.md` for provider credential,

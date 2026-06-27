@@ -322,13 +322,22 @@ class TestMessenger(unittest.TestCase):
 
         self.assertEqual(calls, [('user-1', 'weather'), ('user-1', 'weather')])
 
-    def test_recent_message_ids_evict_oldest_claim_at_bound(self):
-        recent = messenger.RecentMessageIds(2)
+    def test_recent_message_ids_never_evict_in_flight_claim(self):
+        recent = messenger.RecentMessageIds(1)
+
+        self.assertTrue(recent.claim('mid-in-flight'))
+        self.assertTrue(recent.claim('mid-other'))
+        self.assertFalse(recent.claim('mid-in-flight'))
+
+    def test_recent_message_ids_bound_completed_history(self):
+        recent = messenger.RecentMessageIds(1)
 
         self.assertTrue(recent.claim('mid-1'))
+        recent.complete('mid-1')
         self.assertTrue(recent.claim('mid-2'))
-        self.assertTrue(recent.claim('mid-3'))
-        self.assertFalse(recent.claim('mid-3'))
+        recent.complete('mid-2')
+
+        self.assertFalse(recent.claim('mid-2'))
         self.assertTrue(recent.claim('mid-1'))
 
     def test_facebook_wit_failure_does_not_block_later_messages(self):

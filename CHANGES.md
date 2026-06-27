@@ -1,5 +1,44 @@
 # Changes
 
+## 2026-06-26 20:30 PDT - P1 - Preserve in-flight replay claims
+
+### Summary
+
+Prevented completed-history rotation from evicting a Messenger message ID
+while its original Wit action is still running.
+
+### Work completed
+
+- Split replay ownership into non-evictable in-flight claims and bounded
+  oldest-first completed history.
+- Added an explicit success transition while preserving failure release for
+  provider retries.
+- Updated native, dependency-free, maintained-guidance, and completed-plan
+  contracts for the concurrency boundary.
+
+### Validation
+
+- RED: the portable regression proved a second claim evicted the still-active
+  first ID from the previous single `OrderedDict`.
+- GREEN: 63 dependency-free contracts and 45 native Bottle/WebTest tests pass
+  through root and external Make entry points with the reviewed Python 3.14
+  hash-locked environment.
+
+### Bugs / findings
+
+- A concurrent retry could reclaim an evicted active ID and execute the same
+  Wit action twice after enough distinct claims rotated through the cache.
+
+### Blockers
+
+- Replay ownership remains process-local and does not coordinate across
+  workers or restarts, matching the documented sample boundary.
+
+### Next action
+
+- Run the full portable gate, require hosted runtime matrices and CodeQL on the
+  exact head, then merge only if independent review finds no ownership issue.
+
 ## 2026-06-26T12:07:08Z — P2 resource safety — weather location length bound
 
 - Cycle: refreshed the clean public repository after the provider-error merge
