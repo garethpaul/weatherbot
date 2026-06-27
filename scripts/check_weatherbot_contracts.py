@@ -69,6 +69,9 @@ MESSENGER_ECHO_PLAN_PATH = (
 MESSENGER_REPLAY_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-13-messenger-message-replay-guard.md"
 )
+NON_EVICTABLE_CLAIMS_PLAN_PATH = (
+    ROOT / "docs" / "plans" / "2026-06-26-non-evictable-messenger-claims.md"
+)
 MESSENGER_BATCH_PLAN_PATH = (
     ROOT / "docs" / "plans" / "2026-06-13-messenger-batch-processing-bound.md"
 )
@@ -782,15 +785,29 @@ def test_messenger_post_preserves_missing_and_malformed_ids():
         )
 
 
-def test_recent_message_ids_evicts_oldest_claim_at_bound():
+def test_recent_message_ids_never_evicts_in_flight_claim():
     messenger, _request, _response, _requests, _calls = load_messenger()
-    recent = messenger.RecentMessageIds(2)
+    recent = messenger.RecentMessageIds(1)
 
-    assert_true(recent.claim("mid-1"), "first replay claim")
-    assert_true(recent.claim("mid-2"), "second replay claim")
-    assert_true(recent.claim("mid-3"), "third replay claim")
-    assert_true(not recent.claim("mid-3"), "newest claim must remain protected")
-    assert_true(recent.claim("mid-1"), "oldest claim must be evicted")
+    assert_true(recent.claim("mid-in-flight"), "first in-flight replay claim")
+    assert_true(recent.claim("mid-other"), "second in-flight replay claim")
+    assert_true(
+        not recent.claim("mid-in-flight"),
+        "in-flight replay claim must never be evicted",
+    )
+
+
+def test_recent_message_ids_bounds_completed_history():
+    messenger, _request, _response, _requests, _calls = load_messenger()
+    recent = messenger.RecentMessageIds(1)
+
+    assert_true(recent.claim("mid-1"), "first completed replay claim")
+    recent.complete("mid-1")
+    assert_true(recent.claim("mid-2"), "second completed replay claim")
+    recent.complete("mid-2")
+
+    assert_true(not recent.claim("mid-2"), "newest completed ID must remain protected")
+    assert_true(recent.claim("mid-1"), "oldest completed ID must be evicted")
 
 
 def test_messenger_replay_source_contracts():
@@ -799,18 +816,22 @@ def test_messenger_replay_source_contracts():
             "MAX_RECENT_MESSENGER_MESSAGE_IDS = 1024",
             "class RecentMessageIds(object):",
             "self._lock = threading.Lock()",
-            "self._ids.popitem(last=False)",
+            "self._in_flight = set()",
+            "self._completed = OrderedDict()",
+            "self._completed.popitem(last=False)",
             "message_id = clean_text_value(message.get('mid'))",
             "recent_messenger_message_ids.claim(message_id)",
+            "recent_messenger_message_ids.complete(message_id)",
             "recent_messenger_message_ids.release(message_id)"):
         assert_true(contract in source, "missing Messenger replay contract {0}".format(contract))
 
     claim_position = source.index("recent_messenger_message_ids.claim(message_id)")
     action_position = source.index("client.run_actions(session_id=fb_id, message=text)")
+    complete_position = source.index("recent_messenger_message_ids.complete(message_id)")
     release_position = source.index("recent_messenger_message_ids.release(message_id)")
     assert_true(
-        claim_position < action_position < release_position,
-        "claim, Wit action, and failure release must stay ordered",
+        claim_position < action_position < complete_position < release_position,
+        "claim, Wit action, success completion, and failure release must stay ordered",
     )
 
 
@@ -1585,6 +1606,10 @@ def test_completed_plans_are_in_docs_plans():
     assert_completed_plan(MESSENGER_CHALLENGE_PLAN_PATH, "weatherbot Messenger challenge plain text")
     assert_completed_plan(MESSENGER_ECHO_PLAN_PATH, "weatherbot Messenger echo guard")
     assert_completed_plan(MESSENGER_REPLAY_PLAN_PATH, "weatherbot Messenger replay guard")
+    assert_completed_plan(
+        NON_EVICTABLE_CLAIMS_PLAN_PATH,
+        "weatherbot non-evictable Messenger claims",
+    )
     assert_completed_plan(MESSENGER_BATCH_PLAN_PATH, "weatherbot Messenger batch processing bound")
     assert_completed_plan(MAKE_ROOT_PROTECTION_PLAN_PATH, "weatherbot Make root override protection")
     assert_completed_plan(PROVIDER_SETUP_PLAN_PATH, "weatherbot provider setup guide")
@@ -1932,7 +1957,8 @@ def main():
         test_messenger_post_releases_claim_after_wit_failure,
         test_messenger_post_releases_claim_after_unexpected_failure,
         test_messenger_post_preserves_missing_and_malformed_ids,
-        test_recent_message_ids_evicts_oldest_claim_at_bound,
+        test_recent_message_ids_never_evicts_in_flight_claim,
+        test_recent_message_ids_bounds_completed_history,
         test_messenger_replay_source_contracts,
         test_messenger_batch_source_contracts,
         test_messenger_post_isolates_wit_failures_per_message,

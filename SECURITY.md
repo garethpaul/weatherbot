@@ -44,10 +44,11 @@ parameters and case differences are accepted, while other types return 415
 before signature verification or JSON parsing.
 Messenger GET verification challenges are returned as UTF-8 plain text so
 untrusted challenge values cannot be interpreted as HTML.
-Recent non-empty Messenger message IDs are claimed before Wit actions in a
-bounded process-local cache. Duplicate deliveries are acknowledged without
-repeating actions, while failed actions release their claims for provider
-retries. Claims do not span workers or process restarts.
+Recent non-empty Messenger message IDs are claimed before Wit actions. Active
+claims are non-evictable, while only completed IDs use bounded oldest-first
+history. Duplicate deliveries are acknowledged without repeating actions, and
+failed actions release their claims for provider retries. Claims do not span
+workers or process restarts.
 Messenger provider HTTP errors propagate through the Wit action and release
 the current message-ID claim so a later webhook delivery can retry the reply.
 OpenWeather failures for a known location produce a stable user-facing

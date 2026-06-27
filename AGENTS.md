@@ -54,6 +54,8 @@
 - `WEATHERBOT_DEBUG=1` enables Bottle debug mode for local development; it is disabled by default.
 - Wit debug logs must not include action context values, which can contain user locations and forecast state.
 - Normalized Wit locations longer than 256 characters must not reach OpenWeather.
+- In-flight Messenger message-ID claims must never be evicted; only completed
+  replay history is bounded and eligible for oldest-first eviction.
 
 ## Agent workflow
 

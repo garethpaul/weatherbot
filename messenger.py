@@ -78,21 +78,29 @@ MAX_WEATHER_LOCATION_LENGTH = 256
 class RecentMessageIds(object):
     def __init__(self, max_entries):
         self.max_entries = max_entries
-        self._ids = OrderedDict()
+        self._in_flight = set()
+        self._completed = OrderedDict()
         self._lock = threading.Lock()
 
     def claim(self, message_id):
         with self._lock:
-            if message_id in self._ids:
+            if message_id in self._in_flight or message_id in self._completed:
                 return False
-            self._ids[message_id] = None
-            while len(self._ids) > self.max_entries:
-                self._ids.popitem(last=False)
+            self._in_flight.add(message_id)
             return True
+
+    def complete(self, message_id):
+        with self._lock:
+            if message_id not in self._in_flight:
+                return
+            self._in_flight.remove(message_id)
+            self._completed[message_id] = None
+            while len(self._completed) > self.max_entries:
+                self._completed.popitem(last=False)
 
     def release(self, message_id):
         with self._lock:
-            self._ids.pop(message_id, None)
+            self._in_flight.discard(message_id)
 
 
 recent_messenger_message_ids = RecentMessageIds(
@@ -194,6 +202,8 @@ def messenger_post():
         # Let's forward the message to the Wit.ai Bot Engine
         try:
             client.run_actions(session_id=fb_id, message=text)
+            if message_id:
+                recent_messenger_message_ids.complete(message_id)
         except WitError:
             if message_id:
                 recent_messenger_message_ids.release(message_id)
